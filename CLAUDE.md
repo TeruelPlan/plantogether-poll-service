@@ -32,7 +32,7 @@ cd ../plantogether-common && mvn clean install
 
 ## Architecture
 
-Spring Boot 3.3.6 microservice (Java 21). Manages date polling for trips: creating polls, collecting YES/MAYBE/NO
+Spring Boot 3.3.6 microservice (Java 25). Manages date polling for trips: creating polls, collecting YES/MAYBE/NO
 responses, and locking a winning slot.
 
 **Ports:** REST `8082` · gRPC `9082` (server — not yet used, reserved for future consumers)
