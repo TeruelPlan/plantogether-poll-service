@@ -1,95 +1,94 @@
 # Poll Service
 
-> Service de gestion des sondages de dates pour les voyages
+> Date polling management service for trips
 
-## Rôle dans l'architecture
+## Role in the Architecture
 
-Le Poll Service permet aux participants de décider collectivement des dates du voyage. Chaque voyage peut avoir
-plusieurs sondages de dates avec plusieurs créneaux proposés. Les participants votent (YES / MAYBE / NO), les votes
-sont pondérés pour déterminer le créneau gagnant, et l'organisateur verrouille le résultat — ce qui met à jour
-automatiquement les dates du trip via RabbitMQ.
+The Poll Service allows participants to collectively decide on trip dates. Each trip can have multiple
+date polls with multiple proposed time slots. Participants vote (YES / MAYBE / NO), votes are weighted
+to determine the winning slot, and the organizer locks the result — which automatically updates the trip
+dates via RabbitMQ.
 
-## Fonctionnalités
+## Features
 
-- Création de sondages de dates avec plusieurs créneaux
-- Vote pondéré : YES (2 pts) / MAYBE (1 pt) / NO (0 pt)
-- Verrouillage d'un créneau par l'organisateur
-- Vérification d'appartenance au trip via gRPC (TripService.CheckMembership)
-- Publication d'un événement `poll.locked` consommé par Trip Service pour mettre à jour les dates
+- Date poll creation with multiple time slots
+- Weighted voting: YES (2 pts) / MAYBE (1 pt) / NO (0 pt)
+- Slot locking by the organizer
+- Trip membership verification via gRPC (TripService.IsMember)
+- Publishing a `poll.locked` event consumed by Trip Service to update dates
 
-## Endpoints REST
+## REST Endpoints
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| POST | `/api/v1/trips/{tripId}/polls` | Créer un sondage |
-| GET | `/api/v1/trips/{tripId}/polls` | Liste des sondages du voyage |
-| GET | `/api/v1/polls/{pollId}` | Détail + matrice des réponses |
-| PUT | `/api/v1/polls/{pollId}/respond` | Voter (crée ou met à jour la réponse) |
-| PUT | `/api/v1/polls/{pollId}/lock` | Verrouiller un créneau (ORGANIZER) |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/trips/{tripId}/polls` | Create a poll |
+| GET | `/api/v1/trips/{tripId}/polls` | List polls for the trip |
+| GET | `/api/v1/polls/{pollId}` | Detail + response matrix |
+| PUT | `/api/v1/polls/{pollId}/respond` | Vote (creates or updates the response) |
+| PUT | `/api/v1/polls/{pollId}/lock` | Lock a slot (ORGANIZER) |
 
 ## gRPC Client
 
-Le Poll Service appelle le Trip Service via gRPC avant chaque opération :
+The Poll Service calls the Trip Service via gRPC before each operation:
 
-- `TripService.CheckMembership(tripId, userId)` — vérifie que l'utilisateur est membre du trip
+- `TripService.IsMember(tripId, deviceId)` — verifies that the user is a trip member
 
-## Modèle de données (`db_poll`)
+## Data Model (`db_poll`)
 
 **poll**
 
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `id` | UUID PK | Identifiant unique (UUID v7) |
-| `trip_id` | UUID NOT NULL | Référence au trip (keycloak_id externe) |
-| `title` | VARCHAR(255) NOT NULL | Titre du sondage |
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique identifier (UUID v7) |
+| `trip_id` | UUID NOT NULL | Trip reference |
+| `title` | VARCHAR(255) NOT NULL | Poll title |
 | `status` | ENUM NOT NULL | OPEN / LOCKED |
-| `locked_slot_index` | INT NULLABLE | Index du créneau verrouillé |
-| `created_by` | UUID NOT NULL | keycloak_id du créateur |
+| `locked_slot_index` | INT NULLABLE | Index of the locked slot |
+| `created_by` | UUID NOT NULL | device_id of the creator |
 | `created_at` | TIMESTAMP NOT NULL | |
 | `updated_at` | TIMESTAMP NOT NULL | |
 
 **poll_slot**
 
-| Colonne | Type | Description |
-|---------|------|-------------|
+| Column | Type | Description |
+|--------|------|-------------|
 | `id` | UUID PK | |
 | `poll_id` | UUID NOT NULL FK→poll | |
-| `start_date` | DATE NOT NULL | Début du créneau |
-| `end_date` | DATE NOT NULL | Fin du créneau |
-| `slot_index` | INT NOT NULL | Ordre d'affichage |
+| `start_date` | DATE NOT NULL | Slot start |
+| `end_date` | DATE NOT NULL | Slot end |
+| `slot_index` | INT NOT NULL | Display order |
 
 **poll_response**
 
-| Colonne | Type | Description |
-|---------|------|-------------|
+| Column | Type | Description |
+|--------|------|-------------|
 | `id` | UUID PK | |
 | `poll_slot_id` | UUID NOT NULL FK→poll_slot | |
-| `keycloak_id` | UUID NOT NULL | Votant |
+| `device_id` | UUID NOT NULL | Voter device UUID |
 | `status` | ENUM NOT NULL | YES / MAYBE / NO |
 
-Contrainte unique : `(poll_slot_id, keycloak_id)` — un vote par créneau par utilisateur
+Unique constraint: `(poll_slot_id, device_id)` — one vote per slot per user
 
-## Événements RabbitMQ (Exchange : `plantogether.events`)
+## RabbitMQ Events (Exchange: `plantogether.events`)
 
-**Publie :**
+**Publishes:**
 
-| Routing Key | Déclencheur |
-|-------------|-------------|
-| `poll.created` | Création d'un sondage |
-| `poll.locked` | Verrouillage d'un créneau (Trip Service en est consommateur pour màj les dates) |
+| Routing Key | Trigger |
+|-------------|---------|
+| `poll.created` | Poll creation |
+| `poll.locked` | Slot locking (Trip Service consumes this to update dates) |
 
-**Consomme :** aucun
+**Consumes:** none
 
-## Logique métier
+## Business Logic
 
-Le score de chaque créneau est calculé à la volée lors de la consultation :
+The score for each slot is computed on the fly at query time:
 
 ```
-Score = (nb_YES × 2) + (nb_MAYBE × 1)
+Score = (nb_YES x 2) + (nb_MAYBE x 1)
 ```
 
-Le créneau avec le score le plus élevé est le gagnant suggéré. L'organisateur reste libre de verrouiller
-n'importe quel créneau.
+The slot with the highest score is the suggested winner. The organizer is free to lock any slot.
 
 ## Configuration
 
@@ -114,28 +113,29 @@ grpc:
       address: static://trip-service:9081
 ```
 
-## Lancer en local
+## Running Locally
 
 ```bash
-# Prérequis : docker compose --profile essential up -d
-# + plantogether-proto et plantogether-common installés
+# Prerequisites: docker compose up -d
+# + plantogether-proto and plantogether-common installed
 
 mvn spring-boot:run
 ```
 
-## Dépendances
+## Dependencies
 
-- **Keycloak 24+** : validation des tokens JWT
-- **PostgreSQL 16** (`db_poll`) : sondages, créneaux, réponses
-- **RabbitMQ** : publication d'événements (`poll.created`, `poll.locked`)
-- **Redis** : rate limiting (Bucket4j)
-- **Trip Service** (gRPC 9081) : vérification d'appartenance au trip
-- **plantogether-proto** : contrats gRPC (client)
-- **plantogether-common** : DTOs events, CorsConfig
+- **PostgreSQL 16** (`db_poll`): polls, slots, responses
+- **RabbitMQ**: event publishing (`poll.created`, `poll.locked`)
+- **Redis**: rate limiting (Bucket4j)
+- **Trip Service** (gRPC 9081): trip membership verification
+- **plantogether-proto**: gRPC contracts (client)
+- **plantogether-common**: event DTOs, DeviceIdFilter, SecurityAutoConfiguration, CorsConfig
 
-## Sécurité
+## Security
 
-- Tous les endpoints requièrent un token Bearer Keycloak valide
-- L'appartenance au trip est vérifiée via gRPC à chaque opération
-- Seul l'ORGANIZER peut verrouiller un créneau
-- Zero PII stockée (uniquement des `keycloak_id`)
+- Anonymous device-based identity: `X-Device-Id` header on every request
+- `DeviceIdFilter` (from plantogether-common, auto-configured via `SecurityAutoConfiguration`) extracts the device UUID and sets the SecurityContext principal
+- No JWT, no Keycloak, no login, no sessions
+- Trip membership is verified via gRPC at each operation
+- Only the ORGANIZER can lock a slot
+- Zero PII stored (only `device_id` references)
