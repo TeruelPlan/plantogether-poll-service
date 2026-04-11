@@ -104,7 +104,7 @@
             <groupId>com.plantogether</groupId>
             <artifactId>plantogether-proto</artifactId>
             <version>1.0.0</version>
-            <scope>test</scope>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 

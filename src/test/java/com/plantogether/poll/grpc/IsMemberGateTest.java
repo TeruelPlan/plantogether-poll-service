@@ -1,8 +1,8 @@
 package com.plantogether.poll.grpc;
 
-import com.plantogether.proto.trip.IsMemberRequest;
-import com.plantogether.proto.trip.IsMemberResponse;
-import com.plantogether.proto.trip.TripServiceGrpc;
+import com.plantogether.trip.grpc.IsMemberRequest;
+import com.plantogether.trip.grpc.IsMemberResponse;
+import com.plantogether.trip.grpc.TripServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.inprocess.InProcessChannelBuilder;
