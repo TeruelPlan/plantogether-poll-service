@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
  *
  * Pattern: InProcessServerBuilder (grpc-testing) — no real network required.
  */
-@Disabled("R05 RED PHASE — poll-service write endpoints not implemented yet")
+@Disabled("R05 RED PHASE — poll-service write endpoints not implemented yet. Track: TeruelPlan/plantogether-poll-service#8")
 class IsMemberGateTest {
 
     private static final String SERVER_NAME = "test-trip-grpc-" + UUID.randomUUID();
