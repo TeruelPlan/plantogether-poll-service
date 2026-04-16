@@ -1,5 +1,12 @@
 package com.plantogether.poll.grpc;
 
+import com.plantogether.poll.controller.PollController;
+import com.plantogether.poll.domain.Poll;
+import com.plantogether.poll.event.publisher.PollEventPublisher.PollCreatedInternalEvent;
+import com.plantogether.poll.exception.GlobalExceptionHandler;
+import com.plantogether.poll.grpc.client.TripGrpcClient;
+import com.plantogether.poll.repository.PollRepository;
+import com.plantogether.poll.service.PollService;
 import com.plantogether.trip.grpc.IsMemberRequest;
 import com.plantogether.trip.grpc.IsMemberResponse;
 import com.plantogether.trip.grpc.TripServiceGrpc;
@@ -10,37 +17,62 @@ import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 /**
- * Integration tests verifying that poll-service enforces the IsMember gRPC gate
- * before accepting any write operation (R05 — CRITICAL gap).
+ * Integration tests verifying poll-service enforces the IsMember gRPC gate
+ * before accepting any write operation (R05).
  *
- * Acceptance criteria:
- * - POST /api/v1/trips/{tripId}/polls by a non-member → 403 Forbidden
- * - POST /api/v1/trips/{tripId}/polls by a member → processed (2xx or business error)
- * - IsMember gRPC stub is called exactly once per write request
- *
- * TDD RED PHASE: Tests are @Disabled because:
- * 1. poll-service has no REST controller yet (implementation pending)
- * 2. poll-service has no TripGrpcClient yet (implementation pending)
- * Remove @Disabled once poll-service write endpoints are implemented.
- *
- * Pattern: InProcessServerBuilder (grpc-testing) — no real network required.
+ * Pattern: InProcessServerBuilder (grpc-testing) + standalone MockMvc.
+ * A real TripGrpcClient is wired against an in-process gRPC server stubbing TripService.
  */
-@Disabled("R05 RED PHASE — poll-service write endpoints not implemented yet. Track: TeruelPlan/plantogether-poll-service#8")
 class IsMemberGateTest {
 
     private static final String SERVER_NAME = "test-trip-grpc-" + UUID.randomUUID();
+    private static final String DEVICE_ID = UUID.randomUUID().toString();
 
     private Server mockTripServer;
     private ManagedChannel channel;
     private CapturingTripServiceImpl mockTripService;
+    private MockMvc mockMvc;
+    private Authentication authentication;
+    private ApplicationEventPublisher applicationEventPublisher;
+
+    private static String validBody() {
+        LocalDate a = LocalDate.now().plusMonths(2);
+        LocalDate b = a.plusDays(14);
+        return """
+                {
+                  "title": "When to leave?",
+                  "slots": [
+                    {"startDate": "%s", "endDate": "%s"},
+                    {"startDate": "%s", "endDate": "%s"}
+                  ]
+                }
+                """.formatted(a, a.plusDays(6), b, b.plusDays(6));
+    }
 
     @BeforeEach
     void setUp() throws IOException {
@@ -56,114 +88,98 @@ class IsMemberGateTest {
                 .forName(SERVER_NAME)
                 .directExecutor()
                 .build();
+
+        TripGrpcClient tripGrpcClient = new TripGrpcClient();
+        tripGrpcClient.setStub(TripServiceGrpc.newBlockingStub(channel));
+
+        PollRepository pollRepository = mock(PollRepository.class);
+        applicationEventPublisher = mock(ApplicationEventPublisher.class);
+        when(pollRepository.save(any(Poll.class))).thenAnswer(inv -> {
+            Poll p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            p.getSlots().forEach(s -> s.setId(UUID.randomUUID()));
+            return p;
+        });
+
+        PollService pollService = new PollService(pollRepository, tripGrpcClient, applicationEventPublisher);
+        PollController controller = new PollController(pollService);
+
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+        authentication = new UsernamePasswordAuthenticationToken(
+                DEVICE_ID, "", List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     @AfterEach
     void tearDown() throws InterruptedException {
+        SecurityContextHolder.clearContext();
         channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
         mockTripServer.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
     }
 
-    // -------------------------------------------------------------------------
-    // R05-1: Non-member write → 403
-    // -------------------------------------------------------------------------
-
     @Test
     void createPoll_byNonMember_returns403() throws Exception {
         UUID tripId = UUID.randomUUID();
-        UUID deviceId = UUID.randomUUID();
+        mockTripService.stubIsMember(false, "");
 
-        // Stub: IsMember returns false
-        mockTripService.stubIsMember(tripId, deviceId, false, "");
+        mockMvc.perform(post("/api/v1/trips/{tripId}/polls", tripId)
+                        .principal(authentication)
+                        .header("X-Device-Id", DEVICE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isForbidden());
 
-        // TODO: Replace with actual poll-service HTTP test client (MockMvc or RestAssured)
-        // once TripGrpcClient and PollController are implemented.
-        //
-        // Expected call:
-        //   POST /api/v1/trips/{tripId}/polls
-        //   Header: X-Device-Id: {deviceId}
-        //   Body: { "title": "When should we leave?", "slots": [...] }
-        //
-        // Expected response: 403 Forbidden
-        //
-        // Verification:
-        //   assertThat(mockTripService.isMemberCallCount()).isEqualTo(1);
-        //   assertThat(mockTripService.lastIsMemberRequest().getTripId()).isEqualTo(tripId.toString());
-
-        // Placeholder assertion to satisfy JUnit — replace once controller exists
-        org.junit.jupiter.api.Assertions.assertTrue(true,
-                "Placeholder — implement once PollController + TripGrpcClient exist");
+        assertThat(mockTripService.callCount).isEqualTo(1);
+        assertThat(mockTripService.lastRequest.getTripId()).isEqualTo(tripId.toString());
+        verify(applicationEventPublisher, org.mockito.Mockito.never())
+                .publishEvent(any(PollCreatedInternalEvent.class));
     }
-
-    // -------------------------------------------------------------------------
-    // R05-2: Member write → forwarded to business logic (not 403)
-    // -------------------------------------------------------------------------
 
     @Test
-    void createPoll_byMember_isForwardedToBusiness() throws Exception {
+    void createPoll_byMember_isForwardedToBusinessAndPublishesEvent() throws Exception {
         UUID tripId = UUID.randomUUID();
-        UUID deviceId = UUID.randomUUID();
+        mockTripService.stubIsMember(true, "PARTICIPANT");
 
-        // Stub: IsMember returns true with PARTICIPANT role
-        mockTripService.stubIsMember(tripId, deviceId, true, "PARTICIPANT");
+        mockMvc.perform(post("/api/v1/trips/{tripId}/polls", tripId)
+                        .principal(authentication)
+                        .header("X-Device-Id", DEVICE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isCreated());
 
-        // TODO: Replace with actual poll-service HTTP test client once implemented.
-        //
-        // Expected: response is NOT 403 (either 201 Created or a business-level error)
-        //
-        // Verification:
-        //   assertThat(mockTripService.isMemberCallCount()).isEqualTo(1);
-        //   assertThat(response.getStatus()).isNotEqualTo(403);
-
-        org.junit.jupiter.api.Assertions.assertTrue(true,
-                "Placeholder — implement once PollController + TripGrpcClient exist");
+        assertThat(mockTripService.callCount).isEqualTo(1);
+        verify(applicationEventPublisher).publishEvent(any(PollCreatedInternalEvent.class));
     }
-
-    // -------------------------------------------------------------------------
-    // R05-3: IsMember gRPC stub is called exactly once per write request
-    // -------------------------------------------------------------------------
 
     @Test
     void createPoll_isMemberCalledExactlyOnce() throws Exception {
         UUID tripId = UUID.randomUUID();
-        UUID deviceId = UUID.randomUUID();
+        mockTripService.stubIsMember(false, "");
 
-        mockTripService.stubIsMember(tripId, deviceId, false, "");
+        mockMvc.perform(post("/api/v1/trips/{tripId}/polls", tripId)
+                        .principal(authentication)
+                        .header("X-Device-Id", DEVICE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody()));
 
-        // TODO: Trigger HTTP call and assert:
-        //   assertThat(mockTripService.isMemberCallCount()).isEqualTo(1);
-
-        org.junit.jupiter.api.Assertions.assertTrue(true,
-                "Placeholder — implement once PollController + TripGrpcClient exist");
+        assertThat(mockTripService.callCount).isEqualTo(1);
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
-    /**
-     * Minimal in-process TripService stub that captures IsMember calls
-     * and returns configurable responses.
-     */
     static class CapturingTripServiceImpl extends TripServiceGrpc.TripServiceImplBase {
 
-        private boolean memberResult;
-        private String roleResult;
-        private int callCount;
-        private IsMemberRequest lastRequest;
+        boolean memberResult;
+        String roleResult = "";
+        int callCount;
+        IsMemberRequest lastRequest;
 
-        void stubIsMember(UUID tripId, UUID deviceId, boolean isMember, String role) {
+        void stubIsMember(boolean isMember, String role) {
             this.memberResult = isMember;
             this.roleResult = role;
             this.callCount = 0;
-        }
-
-        int isMemberCallCount() {
-            return callCount;
-        }
-
-        IsMemberRequest lastIsMemberRequest() {
-            return lastRequest;
+            this.lastRequest = null;
         }
 
         @Override
