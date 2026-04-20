@@ -2,7 +2,7 @@ package com.plantogether.poll.dto;
 
 import com.plantogether.poll.domain.Poll;
 import com.plantogether.poll.domain.PollResponse;
-import com.plantogether.poll.domain.VoteStatus;
+import com.plantogether.poll.service.PollScoring;
 import com.plantogether.trip.grpc.TripMemberProto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,9 +39,7 @@ public class PollDetailResponse {
         List<SlotDetailResponse> slotDetails = poll.getSlots().stream()
                 .map(slot -> {
                     List<PollResponse> slotResponses = responsesBySlot.getOrDefault(slot.getId(), List.of());
-                    int yesCount = (int) slotResponses.stream().filter(r -> r.getStatus() == VoteStatus.YES).count();
-                    int maybeCount = (int) slotResponses.stream().filter(r -> r.getStatus() == VoteStatus.MAYBE).count();
-                    int score = (yesCount * 2) + maybeCount;
+                    int score = PollScoring.scoreForSlot(slotResponses);
 
                     List<VoteEntry> votes = slotResponses.stream()
                             .map(r -> VoteEntry.builder()

@@ -103,7 +103,7 @@ public class PollResponseService {
                     .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
                     .orElseThrow(() -> race);
             existing.setStatus(status);
-            return pollResponseRepository.save(existing);
+            return existing;
         }
     }
 }

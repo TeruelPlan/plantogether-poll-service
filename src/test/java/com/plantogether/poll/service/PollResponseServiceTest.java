@@ -238,7 +238,6 @@ class PollResponseServiceTest {
                         .id(UUID.randomUUID()).pollSlot(slotA).deviceId(deviceUuid).status(VoteStatus.MAYBE).build()));  // race re-lookup
         when(insertHelper.insertNew(slotA, deviceUuid, VoteStatus.YES))
                 .thenThrow(new DataIntegrityViolationException("duplicate key"));
-        when(pollResponseRepository.save(any(PollResponse.class))).thenAnswer(inv -> inv.getArgument(0));
         when(pollResponseRepository.findByPollSlot_Id(slotAId)).thenReturn(List.of(
                 PollResponse.builder().id(UUID.randomUUID()).pollSlot(slotA).deviceId(deviceUuid).status(VoteStatus.YES).build()
         ));
