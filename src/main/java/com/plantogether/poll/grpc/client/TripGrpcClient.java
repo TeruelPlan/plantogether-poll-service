@@ -1,7 +1,10 @@
 package com.plantogether.poll.grpc.client;
 
+import com.plantogether.trip.grpc.GetTripMembersRequest;
+import com.plantogether.trip.grpc.GetTripMembersResponse;
 import com.plantogether.trip.grpc.IsMemberRequest;
 import com.plantogether.trip.grpc.IsMemberResponse;
+import com.plantogether.trip.grpc.TripMemberProto;
 import com.plantogether.trip.grpc.TripServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -16,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -66,6 +70,27 @@ public class TripGrpcClient {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
                     "Unable to verify trip membership");
+        }
+    }
+
+    public List<TripMemberProto> getTripMembers(String tripId) {
+        try {
+            GetTripMembersResponse response = stub.withDeadlineAfter(2, TimeUnit.SECONDS)
+                    .getTripMembers(GetTripMembersRequest.newBuilder()
+                            .setTripId(tripId)
+                            .build());
+            return response.getMembersList();
+        } catch (StatusRuntimeException e) {
+            Status.Code code = e.getStatus().getCode();
+            log.error("GetTripMembers gRPC call failed for trip={}: {}", tripId, e.getStatus());
+            if (code == Status.Code.UNAVAILABLE || code == Status.Code.DEADLINE_EXCEEDED) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "Trip members lookup temporarily unavailable");
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Unable to fetch trip members");
         }
     }
 

@@ -1,6 +1,7 @@
 package com.plantogether.poll.exception;
 
 import com.plantogether.common.exception.AccessDeniedException;
+import com.plantogether.common.exception.ConflictException;
 import com.plantogether.common.exception.ErrorResponse;
 import com.plantogether.common.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +32,15 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.builder()
                         .timestamp(Instant.now()).status(403)
                         .error("Forbidden").message(ex.getMessage())
+                        .path(req.getRequestURI()).build());
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflict(ConflictException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.builder()
+                        .timestamp(Instant.now()).status(409)
+                        .error("Conflict").message(ex.getMessage())
                         .path(req.getRequestURI()).build());
     }
 

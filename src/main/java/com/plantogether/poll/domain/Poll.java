@@ -47,6 +47,7 @@ public class Poll {
     private Instant updatedAt;
 
     @OneToMany(mappedBy = "poll", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("slotIndex ASC")
     @Builder.Default
     private List<PollSlot> slots = new ArrayList<>();
 }

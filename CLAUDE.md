@@ -35,7 +35,7 @@ cd ../plantogether-common && mvn clean install
 Spring Boot 3.3.6 microservice (Java 25). Manages date polling for trips: creating polls, collecting YES/MAYBE/NO
 responses, and locking a winning slot.
 
-**Ports:** REST `8082` · gRPC `9082` (server — not yet used, reserved for future consumers)
+**Ports:** REST `8082` · gRPC `9082` (server — not yet used, reserved for future consumers) · WebSocket/STOMP on the same `8082` (path `/ws-poll`)
 
 **Package:** `com.plantogether.poll`
 
@@ -91,10 +91,22 @@ Returns 403 if `is_member = false`.
 | PUT | `/api/v1/polls/{pollId}/respond` | X-Device-Id + member | Submit or update vote (upsert) |
 | PUT | `/api/v1/polls/{pollId}/lock` | X-Device-Id + ORGANIZER | Lock a slot → publish poll.locked event |
 
+### WebSocket / STOMP
+
+Serves STOMP at `/ws-poll` (WebSocket + SockJS fallback). Chat consolidation at `/ws` (chat-service) is deferred to Epic 7 — the relay will then move out of poll-service.
+
+| Direction | Destination | Purpose |
+|---|---|---|
+| CONNECT | `/ws-poll` (`X-Device-Id` STOMP header required) | Establish session |
+| SUBSCRIBE | `/topic/trips/{tripId}/updates` | Membership-checked via `TripGrpcClient.IsMember`; relays `POLL_VOTE_CAST` frames |
+
+Membership check is cached in-process for 60 seconds per `(tripId, deviceId)` and invalidated on STOMP `DISCONNECT`. `SimpleBroker` is used (in-process); multi-replica fan-out requires Redis pub/sub — see deferred-work.
+
 ### RabbitMQ events
 
 **Publishes** (exchange `plantogether.events`):
 - `poll.created` — routing key `poll.created` — on poll creation
+- `poll.vote.cast` — routing key `poll.vote.cast` — on vote upsert (AFTER_COMMIT). Payload: `PollVoteCastEvent` from `plantogether-common`
 - `poll.locked` — routing key `poll.locked` — on slot lock (consumed by notification-service and trip-service to update start/end dates)
 
 ### Security

@@ -1,0 +1,110 @@
+package com.plantogether.poll.service;
+
+import com.plantogether.common.exception.AccessDeniedException;
+import com.plantogether.common.exception.ConflictException;
+import com.plantogether.common.exception.ResourceNotFoundException;
+import com.plantogether.poll.domain.Poll;
+import com.plantogether.poll.domain.PollResponse;
+import com.plantogether.poll.domain.PollSlot;
+import com.plantogether.poll.domain.PollStatus;
+import com.plantogether.poll.dto.PollDetailResponse;
+import com.plantogether.poll.dto.RespondRequest;
+import com.plantogether.poll.dto.VoteResponse;
+import com.plantogether.poll.event.publisher.PollRealtimeBroadcaster.PollVoteCastInternalEvent;
+import com.plantogether.poll.grpc.client.TripGrpcClient;
+import com.plantogether.poll.repository.PollRepository;
+import com.plantogether.poll.repository.PollResponseRepository;
+import com.plantogether.trip.grpc.IsMemberResponse;
+import com.plantogether.trip.grpc.TripMemberProto;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class PollResponseService {
+
+    private final PollRepository pollRepository;
+    private final PollResponseRepository pollResponseRepository;
+    private final PollResponseInsertHelper insertHelper;
+    private final TripGrpcClient tripGrpcClient;
+    private final ApplicationEventPublisher applicationEventPublisher;
+
+    public VoteResponse respond(UUID pollId, String deviceId, RespondRequest request) {
+        Poll poll = pollRepository.findById(pollId)
+                .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
+
+        IsMemberResponse membership = tripGrpcClient.isMember(poll.getTripId().toString(), deviceId);
+        if (!membership.getIsMember()) {
+            throw new AccessDeniedException("Device is not a member of this trip");
+        }
+
+        if (poll.getStatus() == PollStatus.LOCKED) {
+            throw new ConflictException("Poll is already locked");
+        }
+
+        PollSlot slot = poll.getSlots().stream()
+                .filter(s -> s.getId().equals(request.getSlotId()))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("PollSlot", request.getSlotId()));
+
+        UUID deviceUuid = UUID.fromString(deviceId);
+
+        PollResponse saved = pollResponseRepository
+                .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
+                .map(existing -> {
+                    existing.setStatus(request.getStatus());
+                    return pollResponseRepository.saveAndFlush(existing);
+                })
+                .orElseGet(() -> insertOrRecover(slot, deviceUuid, request.getStatus()));
+
+        List<PollResponse> slotResponses = pollResponseRepository.findByPollSlot_Id(slot.getId());
+        int newSlotScore = PollScoring.scoreForSlot(slotResponses);
+
+        applicationEventPublisher.publishEvent(new PollVoteCastInternalEvent(
+                poll.getId(),
+                poll.getTripId(),
+                slot.getId(),
+                deviceUuid,
+                request.getStatus(),
+                newSlotScore
+        ));
+
+        return VoteResponse.from(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public PollDetailResponse getPollDetail(UUID pollId, String deviceId) {
+        Poll poll = pollRepository.findById(pollId)
+                .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
+
+        IsMemberResponse membership = tripGrpcClient.isMember(poll.getTripId().toString(), deviceId);
+        if (!membership.getIsMember()) {
+            throw new AccessDeniedException("Device is not a member of this trip");
+        }
+
+        List<PollResponse> responses = pollResponseRepository.findByPollSlot_Poll_Id(pollId);
+        // Surface gRPC failure as 5xx to the caller — the matrix is meaningless without member columns.
+        List<TripMemberProto> members = tripGrpcClient.getTripMembers(poll.getTripId().toString());
+        return PollDetailResponse.from(poll, responses, members);
+    }
+
+    private PollResponse insertOrRecover(PollSlot slot, UUID deviceUuid, com.plantogether.poll.domain.VoteStatus status) {
+        try {
+            return insertHelper.insertNew(slot, deviceUuid, status);
+        } catch (DataIntegrityViolationException race) {
+            // Concurrent insert on (poll_slot_id, device_id) — re-read in the outer transaction and update.
+            PollResponse existing = pollResponseRepository
+                    .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
+                    .orElseThrow(() -> race);
+            existing.setStatus(status);
+            return pollResponseRepository.save(existing);
+        }
+    }
+}
