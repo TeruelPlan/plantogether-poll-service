@@ -7,6 +7,7 @@ import com.plantogether.poll.domain.Poll;
 import com.plantogether.poll.domain.PollResponse;
 import com.plantogether.poll.domain.PollSlot;
 import com.plantogether.poll.domain.PollStatus;
+import com.plantogether.poll.domain.VoteStatus;
 import com.plantogether.poll.dto.PollDetailResponse;
 import com.plantogether.poll.dto.RespondRequest;
 import com.plantogether.poll.dto.VoteResponse;
@@ -14,7 +15,6 @@ import com.plantogether.poll.event.publisher.PollRealtimeBroadcaster.PollVoteCas
 import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.repository.PollRepository;
 import com.plantogether.poll.repository.PollResponseRepository;
-import com.plantogether.trip.grpc.IsMemberResponse;
 import com.plantogether.trip.grpc.TripMemberProto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -40,10 +40,7 @@ public class PollResponseService {
         Poll poll = pollRepository.findById(pollId)
                 .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-        IsMemberResponse membership = tripGrpcClient.isMember(poll.getTripId().toString(), deviceId);
-        if (!membership.getIsMember()) {
-            throw new AccessDeniedException("Device is not a member of this trip");
-        }
+        tripGrpcClient.requireMember(poll.getTripId().toString(), deviceId);
 
         if (poll.getStatus() == PollStatus.LOCKED) {
             throw new ConflictException("Poll is already locked");
@@ -84,18 +81,20 @@ public class PollResponseService {
         Poll poll = pollRepository.findById(pollId)
                 .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-        IsMemberResponse membership = tripGrpcClient.isMember(poll.getTripId().toString(), deviceId);
-        if (!membership.getIsMember()) {
+        // Surface gRPC failure as 5xx to the caller — the matrix is meaningless without member columns.
+        // The members list also gates authorization: self-membership is confirmed by presence in the list,
+        // saving one round-trip compared to a separate IsMember call.
+        List<TripMemberProto> members = tripGrpcClient.getTripMembers(poll.getTripId().toString());
+        boolean isMember = members.stream().anyMatch(m -> deviceId.equals(m.getDeviceId()));
+        if (!isMember) {
             throw new AccessDeniedException("Device is not a member of this trip");
         }
 
         List<PollResponse> responses = pollResponseRepository.findByPollSlot_Poll_Id(pollId);
-        // Surface gRPC failure as 5xx to the caller — the matrix is meaningless without member columns.
-        List<TripMemberProto> members = tripGrpcClient.getTripMembers(poll.getTripId().toString());
         return PollDetailResponse.from(poll, responses, members);
     }
 
-    private PollResponse insertOrRecover(PollSlot slot, UUID deviceUuid, com.plantogether.poll.domain.VoteStatus status) {
+    private PollResponse insertOrRecover(PollSlot slot, UUID deviceUuid, VoteStatus status) {
         try {
             return insertHelper.insertNew(slot, deviceUuid, status);
         } catch (DataIntegrityViolationException race) {

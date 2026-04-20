@@ -5,6 +5,7 @@ import com.plantogether.trip.grpc.GetTripMembersResponse;
 import com.plantogether.trip.grpc.IsMemberRequest;
 import com.plantogether.trip.grpc.IsMemberResponse;
 import com.plantogether.trip.grpc.TripMemberProto;
+import com.plantogether.common.exception.AccessDeniedException;
 import com.plantogether.trip.grpc.TripServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -49,6 +50,12 @@ public class TripGrpcClient {
     public void shutdown() throws InterruptedException {
         if (channel != null) {
             channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+        }
+    }
+
+    public void requireMember(String tripId, String deviceId) {
+        if (!isMember(tripId, deviceId).getIsMember()) {
+            throw new AccessDeniedException("Device is not a member of this trip");
         }
     }
 

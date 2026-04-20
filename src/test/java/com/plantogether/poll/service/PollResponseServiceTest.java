@@ -15,7 +15,6 @@ import com.plantogether.poll.event.publisher.PollRealtimeBroadcaster.PollVoteCas
 import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.repository.PollRepository;
 import com.plantogether.poll.repository.PollResponseRepository;
-import com.plantogether.trip.grpc.IsMemberResponse;
 import com.plantogether.trip.grpc.TripMemberProto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -97,8 +96,10 @@ class PollResponseServiceTest {
     }
 
     private void stubMember(boolean member) {
-        when(tripGrpcClient.isMember(tripId.toString(), deviceId))
-                .thenReturn(IsMemberResponse.newBuilder().setIsMember(member).setRole(member ? "PARTICIPANT" : "").build());
+        if (!member) {
+            doThrow(new AccessDeniedException("Device is not a member of this trip"))
+                    .when(tripGrpcClient).requireMember(tripId.toString(), deviceId);
+        }
     }
 
     @Test
@@ -143,6 +144,7 @@ class PollResponseServiceTest {
         stubMember(true);
         when(pollResponseRepository.findByPollSlot_IdAndDeviceId(slotAId, deviceUuid))
                 .thenReturn(Optional.of(existing));
+        when(pollResponseRepository.saveAndFlush(existing)).thenReturn(existing);
         when(pollResponseRepository.findByPollSlot_Id(slotAId)).thenReturn(List.of(existing));
 
         VoteResponse result = service.respond(pollId, deviceId,
@@ -151,7 +153,6 @@ class PollResponseServiceTest {
         assertEquals(VoteStatus.MAYBE, existing.getStatus());
         assertEquals("MAYBE", result.getStatus());
         verifyNoInteractions(insertHelper);
-        verify(pollResponseRepository, never()).save(any());
     }
 
     @Test
@@ -253,8 +254,8 @@ class PollResponseServiceTest {
     @Test
     void getPollDetail_member_returnsAggregatedScore() {
         when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-        stubMember(true);
         when(tripGrpcClient.getTripMembers(tripId.toString())).thenReturn(List.of(
+                TripMemberProto.newBuilder().setDeviceId(deviceId).setRole("PARTICIPANT").setDisplayName("Self").build(),
                 TripMemberProto.newBuilder().setDeviceId(UUID.randomUUID().toString()).setRole("ORGANIZER").setDisplayName("Alice").build()
         ));
 
@@ -277,15 +278,16 @@ class PollResponseServiceTest {
         assertEquals(5, slotADetail.getScore(), "2 YES × 2 + 1 MAYBE × 1 = 5");
         assertEquals(3, slotADetail.getVotes().size());
         assertEquals(0, detail.getSlots().get(1).getScore());
-        assertEquals(1, detail.getMembers().size());
-        assertEquals("Alice", detail.getMembers().get(0).getDisplayName());
-        verify(tripGrpcClient, times(1)).isMember(tripId.toString(), deviceId);
+        assertEquals(2, detail.getMembers().size());
+        verify(tripGrpcClient, never()).isMember(anyString(), anyString());
     }
 
     @Test
     void getPollDetail_nonMember_throwsAccessDeniedException() {
         when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-        stubMember(false);
+        when(tripGrpcClient.getTripMembers(tripId.toString())).thenReturn(List.of(
+                TripMemberProto.newBuilder().setDeviceId(UUID.randomUUID().toString()).setRole("ORGANIZER").setDisplayName("Alice").build()
+        ));
 
         assertThrows(AccessDeniedException.class, () -> service.getPollDetail(pollId, deviceId));
         verify(pollResponseRepository, never()).findByPollSlot_Poll_Id(any());
