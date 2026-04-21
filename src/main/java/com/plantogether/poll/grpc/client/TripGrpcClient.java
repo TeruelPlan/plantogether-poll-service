@@ -41,6 +41,9 @@ public class TripGrpcClient {
     public void init() {
         channel = ManagedChannelBuilder.forAddress(host, port)
                 .usePlaintext()
+                .keepAliveTime(30, TimeUnit.SECONDS)
+                .keepAliveTimeout(10, TimeUnit.SECONDS)
+                .keepAliveWithoutCalls(true)
                 .build();
         stub = TripServiceGrpc.newBlockingStub(channel);
         log.info("TripGrpcClient initialized → {}:{}", host, port);
@@ -61,7 +64,8 @@ public class TripGrpcClient {
 
     public IsMemberResponse isMember(String tripId, String deviceId) {
         try {
-            return stub.withDeadlineAfter(2, TimeUnit.SECONDS)
+            return stub.withWaitForReady()
+                    .withDeadlineAfter(5, TimeUnit.SECONDS)
                     .isMember(IsMemberRequest.newBuilder()
                             .setTripId(tripId)
                             .setDeviceId(deviceId)
@@ -82,7 +86,8 @@ public class TripGrpcClient {
 
     public List<TripMemberProto> getTripMembers(String tripId) {
         try {
-            GetTripMembersResponse response = stub.withDeadlineAfter(2, TimeUnit.SECONDS)
+            GetTripMembersResponse response = stub.withWaitForReady()
+                    .withDeadlineAfter(5, TimeUnit.SECONDS)
                     .getTripMembers(GetTripMembersRequest.newBuilder()
                             .setTripId(tripId)
                             .build());

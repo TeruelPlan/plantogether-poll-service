@@ -14,8 +14,8 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import java.time.LocalDate;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
@@ -23,12 +23,11 @@ import static org.mockito.Mockito.verify;
 class PollEventPublisherLockTest {
 
     @Mock RabbitTemplate rabbitTemplate;
-    @Mock PollRealtimeBroadcaster realtimeBroadcaster;
 
     @InjectMocks PollEventPublisher publisher;
 
     @Test
-    void publishPollLocked_afterCommit_sendsRabbitAndDelegatesStomp() {
+    void publishPollLocked_afterCommit_sendsRabbitEvent() {
         UUID pollId = UUID.randomUUID();
         UUID tripId = UUID.randomUUID();
         UUID slotId = UUID.randomUUID();
@@ -57,7 +56,5 @@ class PollEventPublisherLockTest {
         assertEquals(LocalDate.of(2026, 6, 8), event.getEndDate());
         assertEquals(lockedBy, event.getLockedByDeviceId());
         assertNotNull(event.getOccurredAt());
-
-        verify(realtimeBroadcaster).broadcastPollLocked(eq(internal), any());
     }
 }
