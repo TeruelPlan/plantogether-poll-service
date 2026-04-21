@@ -32,6 +32,7 @@ import static org.mockito.Mockito.*;
 class PollServiceTest {
 
     @Mock PollRepository pollRepository;
+    @Mock com.plantogether.poll.repository.PollResponseRepository pollResponseRepository;
     @Mock TripGrpcClient tripGrpcClient;
     @Mock ApplicationEventPublisher applicationEventPublisher;
 

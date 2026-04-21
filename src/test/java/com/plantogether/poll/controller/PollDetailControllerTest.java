@@ -8,6 +8,7 @@ import com.plantogether.poll.dto.PollDetailResponse;
 import com.plantogether.poll.dto.VoteResponse;
 import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.service.PollResponseService;
+import com.plantogether.poll.service.PollService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -45,11 +46,14 @@ class PollDetailControllerTest {
     private PollResponseService pollResponseService;
 
     @MockBean
+    private PollService pollService;
+
+    @MockBean
     private TripGrpcClient tripGrpcClient;
 
     @AfterEach
     void tearDown() {
-        Mockito.reset(pollResponseService, tripGrpcClient);
+        Mockito.reset(pollResponseService, pollService, tripGrpcClient);
     }
 
     private String validBody() {
@@ -151,7 +155,7 @@ class PollDetailControllerTest {
                         .contentType("application/json")
                         .content(validBody()))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("Poll is already locked"));
+                .andExpect(jsonPath("$.detail").value("Poll is already locked"));
     }
 
     @Test
@@ -164,6 +168,74 @@ class PollDetailControllerTest {
                         .contentType("application/json")
                         .content(validBody()))
                 .andExpect(status().isNotFound());
+    }
+
+    private String validLockBody() {
+        return """
+                { "slotId": "%s" }
+                """.formatted(slotId);
+    }
+
+    @Test
+    void lockPoll_organizer_returns200AndLockedResponse() throws Exception {
+        PollDetailResponse locked = sampleDetail();
+        locked.setStatus("LOCKED");
+        locked.setLockedSlotId(slotId);
+        when(pollService.lockPoll(eq(pollId), eq(deviceId.toString()), eq(slotId)))
+                .thenReturn(locked);
+
+        mockMvc.perform(put("/api/v1/polls/{pollId}/lock", pollId)
+                        .header("X-Device-Id", deviceId.toString())
+                        .contentType("application/json")
+                        .content(validLockBody()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOCKED"))
+                .andExpect(jsonPath("$.lockedSlotId").value(slotId.toString()));
+    }
+
+    @Test
+    void lockPoll_nonOrganizer_returns403() throws Exception {
+        when(pollService.lockPoll(eq(pollId), eq(deviceId.toString()), eq(slotId)))
+                .thenThrow(new AccessDeniedException("Only the trip organizer can lock a poll"));
+
+        mockMvc.perform(put("/api/v1/polls/{pollId}/lock", pollId)
+                        .header("X-Device-Id", deviceId.toString())
+                        .contentType("application/json")
+                        .content(validLockBody()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void lockPoll_alreadyLocked_returns409() throws Exception {
+        when(pollService.lockPoll(eq(pollId), eq(deviceId.toString()), eq(slotId)))
+                .thenThrow(new ConflictException("Poll is already locked"));
+
+        mockMvc.perform(put("/api/v1/polls/{pollId}/lock", pollId)
+                        .header("X-Device-Id", deviceId.toString())
+                        .contentType("application/json")
+                        .content(validLockBody()))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void lockPoll_slotNotInPoll_returns400() throws Exception {
+        when(pollService.lockPoll(eq(pollId), eq(deviceId.toString()), eq(slotId)))
+                .thenThrow(new IllegalArgumentException("Slot does not belong to this poll"));
+
+        mockMvc.perform(put("/api/v1/polls/{pollId}/lock", pollId)
+                        .header("X-Device-Id", deviceId.toString())
+                        .contentType("application/json")
+                        .content(validLockBody()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void lockPoll_invalidBody_returns400() throws Exception {
+        mockMvc.perform(put("/api/v1/polls/{pollId}/lock", pollId)
+                        .header("X-Device-Id", deviceId.toString())
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

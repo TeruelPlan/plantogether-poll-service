@@ -115,10 +115,10 @@ class IsMemberGateTest {
             return p;
         });
 
-        PollService pollService = new PollService(pollRepository, tripGrpcClient, applicationEventPublisher);
+        pollResponseRepository = mock(PollResponseRepository.class);
+        PollService pollService = new PollService(pollRepository, pollResponseRepository, tripGrpcClient, applicationEventPublisher);
         PollController controller = new PollController(pollService);
 
-        pollResponseRepository = mock(PollResponseRepository.class);
         existingPoll = Poll.builder()
                 .id(UUID.randomUUID())
                 .tripId(UUID.randomUUID())
@@ -158,7 +158,7 @@ class IsMemberGateTest {
         when(pollResponseRepository.findByPollSlot_Id(any())).thenReturn(List.of());
         PollResponseService pollResponseService = new PollResponseService(
                 pollRepository, pollResponseRepository, insertHelper, tripGrpcClient, applicationEventPublisher);
-        PollDetailController detailController = new PollDetailController(pollResponseService);
+        PollDetailController detailController = new PollDetailController(pollResponseService, pollService);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller, detailController)
                 .setControllerAdvice(new GlobalExceptionHandler())

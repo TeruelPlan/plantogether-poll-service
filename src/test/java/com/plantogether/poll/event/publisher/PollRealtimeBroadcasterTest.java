@@ -17,6 +17,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,7 +45,7 @@ class PollRealtimeBroadcasterTest {
 
         ArgumentCaptor<Object> stompPayload = ArgumentCaptor.forClass(Object.class);
         verify(simpMessagingTemplate).convertAndSend(
-                eqStr("/topic/trips/" + tripId + "/updates"),
+                eq("/topic/trips/" + tripId + "/updates"),
                 stompPayload.capture());
         PollVoteCastMessage stomp = (PollVoteCastMessage) stompPayload.getValue();
         assertEquals("POLL_VOTE_CAST", stomp.type());
@@ -57,8 +58,8 @@ class PollRealtimeBroadcasterTest {
 
         ArgumentCaptor<PollVoteCastEvent> rabbitEvent = ArgumentCaptor.forClass(PollVoteCastEvent.class);
         verify(rabbitTemplate).convertAndSend(
-                eqStr(RabbitConfig.EXCHANGE),
-                eqStr(RabbitConfig.ROUTING_KEY_POLL_VOTE_CAST),
+                eq(RabbitConfig.EXCHANGE),
+                eq(RabbitConfig.ROUTING_KEY_POLL_VOTE_CAST),
                 rabbitEvent.capture());
         PollVoteCastEvent event = rabbitEvent.getValue();
         assertEquals(pollId.toString(), event.getPollId());
@@ -66,9 +67,5 @@ class PollRealtimeBroadcasterTest {
         assertEquals(slotId.toString(), event.getSlotId());
         assertEquals("YES", event.getStatus());
         assertEquals(4, event.getNewSlotScore());
-    }
-
-    private static String eqStr(String s) {
-        return org.mockito.ArgumentMatchers.eq(s);
     }
 }

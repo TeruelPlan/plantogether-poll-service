@@ -28,7 +28,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Distinct URL from chat-service /ws (Epic 7 will consolidate).
         registry.addEndpoint("/ws-poll")
                 .setAllowedOriginPatterns(allowedOrigins)
                 .withSockJS();

@@ -3,6 +3,7 @@ package com.plantogether.poll.event.publisher;
 import com.plantogether.common.event.PollVoteCastEvent;
 import com.plantogether.poll.config.RabbitConfig;
 import com.plantogether.poll.domain.VoteStatus;
+import com.plantogether.poll.event.publisher.PollEventPublisher.PollLockedInternalEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -52,6 +53,33 @@ public class PollRealtimeBroadcaster {
                 RabbitConfig.ROUTING_KEY_POLL_VOTE_CAST,
                 rabbitEvent
         );
+    }
+
+    public void broadcastPollLocked(PollLockedInternalEvent internal, Instant occurredAt) {
+        PollLockedMessage message = new PollLockedMessage(
+                "POLL_LOCKED",
+                internal.pollId().toString(),
+                internal.tripId().toString(),
+                internal.slotId().toString(),
+                internal.startDate().toString(),
+                internal.endDate().toString(),
+                occurredAt
+        );
+        simpMessagingTemplate.convertAndSend(
+                "/topic/trips/" + internal.tripId() + "/updates",
+                message
+        );
+    }
+
+    public record PollLockedMessage(
+            String type,
+            String pollId,
+            String tripId,
+            String slotId,
+            String startDate,
+            String endDate,
+            Instant occurredAt
+    ) {
     }
 
     public record PollVoteCastInternalEvent(

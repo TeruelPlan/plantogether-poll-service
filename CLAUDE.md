@@ -98,7 +98,7 @@ Serves STOMP at `/ws-poll` (WebSocket + SockJS fallback). Chat consolidation at 
 | Direction | Destination | Purpose |
 |---|---|---|
 | CONNECT | `/ws-poll` (`X-Device-Id` STOMP header required) | Establish session |
-| SUBSCRIBE | `/topic/trips/{tripId}/updates` | Membership-checked via `TripGrpcClient.IsMember`; relays `POLL_VOTE_CAST` frames |
+| SUBSCRIBE | `/topic/trips/{tripId}/updates` | Membership-checked via `TripGrpcClient.IsMember`; relays `POLL_VOTE_CAST` + `POLL_LOCKED` frames |
 
 Membership check is cached in-process for 60 seconds per `(tripId, deviceId)` and invalidated on STOMP `DISCONNECT`. `SimpleBroker` is used (in-process); multi-replica fan-out requires Redis pub/sub — see deferred-work.
 

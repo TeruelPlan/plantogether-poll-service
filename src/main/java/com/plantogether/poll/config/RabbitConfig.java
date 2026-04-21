@@ -13,6 +13,7 @@ public class RabbitConfig {
     public static final String EXCHANGE = "plantogether.events";
     public static final String ROUTING_KEY_POLL_CREATED = "poll.created";
     public static final String ROUTING_KEY_POLL_VOTE_CAST = "poll.vote.cast";
+    public static final String ROUTING_KEY_POLL_LOCKED = "poll.locked";
 
     @Bean
     public TopicExchange plantogetherExchange() {
