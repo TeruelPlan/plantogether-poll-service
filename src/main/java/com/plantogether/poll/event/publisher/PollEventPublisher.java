@@ -13,12 +13,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
+/**
+ * Publishes poll lifecycle events to RabbitMQ. Real-time STOMP broadcasting is
+ * handled by notification-service, which consumes these events.
+ */
 @Component
 @RequiredArgsConstructor
 public class PollEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
-    private final PollRealtimeBroadcaster realtimeBroadcaster;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publishPollCreated(PollCreatedInternalEvent internal) {
@@ -39,7 +42,6 @@ public class PollEventPublisher {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publishPollLocked(PollLockedInternalEvent internal) {
-        Instant now = Instant.now();
         PollLockedEvent event = PollLockedEvent.builder()
                 .pollId(internal.pollId().toString())
                 .tripId(internal.tripId().toString())
@@ -47,14 +49,13 @@ public class PollEventPublisher {
                 .startDate(internal.startDate())
                 .endDate(internal.endDate())
                 .lockedByDeviceId(internal.lockedByDeviceId())
-                .occurredAt(now)
+                .occurredAt(Instant.now())
                 .build();
         rabbitTemplate.convertAndSend(
                 RabbitConfig.EXCHANGE,
                 RabbitConfig.ROUTING_KEY_POLL_LOCKED,
                 event
         );
-        realtimeBroadcaster.broadcastPollLocked(internal, now);
     }
 
     public record PollCreatedInternalEvent(
