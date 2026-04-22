@@ -1,77 +1,66 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xmlns="http://maven.apache.org/POM/4.0.0"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.6</version>
-        <relativePath/>
+        <groupId>com.plantogether</groupId>
+        <artifactId>plantogether-parent</artifactId>
+        <version>1.1.0</version>
     </parent>
 
-    <groupId>com.plantogether</groupId>
     <artifactId>plantogether-poll-service</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>plantogether-poll-service</name>
     <description>Microservice Poll — date polls, score computation</description>
 
-    <properties>
-        <java.version>21</java.version>
-    </properties>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.plantogether</groupId>
+                <artifactId>plantogether-bom</artifactId>
+                <version>1.0.1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
-        <!-- Spring Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-        <!-- Spring Data JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
-        <!-- PostgreSQL Driver -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
-        <!-- Spring Security + OAuth2 Resource Server -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
-        <!-- Bean Validation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-        <!-- RabbitMQ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
-        <!-- Redis Cache -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
-        <!-- Common Library -->
         <dependency>
-            <groupId>com.plantogether</groupId>
-            <artifactId>plantogether-common</artifactId>
-            <version>1.7.0</version>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.plantogether</groupId>
-            <artifactId>plantogether-common</artifactId>
-            <version>1.7.0</version>
-            <classifier>tests</classifier>
-            <scope>test</scope>
-        </dependency>
-        <!-- Flyway -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -80,20 +69,24 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
-        <!-- Actuator -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
+            <groupId>com.plantogether</groupId>
+            <artifactId>plantogether-common</artifactId>
         </dependency>
-        <!-- Lombok -->
+        <dependency>
+            <groupId>com.plantogether</groupId>
+            <artifactId>plantogether-proto</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.38</version>
             <optional>true</optional>
         </dependency>
 
-        <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -109,59 +102,44 @@
             <artifactId>spring-rabbit-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- gRPC testing support for IsMember gate integration tests (R05) -->
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-testing</artifactId>
-            <version>1.63.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.plantogether</groupId>
-            <artifactId>plantogether-proto</artifactId>
-            <version>1.0.0</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-netty-shaded</artifactId>
-            <version>1.63.0</version>
+            <artifactId>plantogether-common</artifactId>
+            <classifier>tests</classifier>
+            <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <repositories>
-        <repository>
-            <id>github-proto</id>
-            <name>GitHub Packages — proto</name>
-            <url>https://maven.pkg.github.com/TeruelPlan/plantogether-proto</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
-        <repository>
-            <id>github-common</id>
-            <name>GitHub Packages — common</name>
-            <url>https://maven.pkg.github.com/TeruelPlan/plantogether-common</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 
     <build>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
-                </configuration>
             </plugin>
         </plugins>
     </build>
+
+    <repositories>
+        <repository>
+            <id>github-parent</id>
+            <url>https://maven.pkg.github.com/TeruelPlan/plantogether-parent</url>
+        </repository>
+        <repository>
+            <id>github-bom</id>
+            <url>https://maven.pkg.github.com/TeruelPlan/plantogether-bom</url>
+        </repository>
+        <repository>
+            <id>github-common</id>
+            <url>https://maven.pkg.github.com/TeruelPlan/plantogether-common</url>
+        </repository>
+        <repository>
+            <id>github-proto</id>
+            <url>https://maven.pkg.github.com/TeruelPlan/plantogether-proto</url>
+        </repository>
+    </repositories>
 </project>

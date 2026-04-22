@@ -24,15 +24,20 @@ mvn test -Dtest=ClassName
 mvn test -Dtest=ClassName#methodName
 ```
 
-**Prerequisites:** install shared libs first:
+**Prerequisites:**
+
+Local Maven builds resolve shared libs (`plantogether-parent`, `plantogether-bom`, `plantogether-common`,
+`plantogether-proto`) from GitHub Packages. Export a PAT with `read:packages` before running `mvn`:
+
 ```bash
-cd ../plantogether-proto && mvn clean install
-cd ../plantogether-common && mvn clean install
+export GITHUB_ACTOR=<your-github-username>
+export GITHUB_TOKEN=<your-PAT-with-read:packages>
+mvn -s .settings.xml clean package
 ```
 
 ## Architecture
 
-Spring Boot 3.3.6 microservice (Java 25). Manages date polling for trips: creating polls, collecting YES/MAYBE/NO
+Spring Boot 3.5.9 microservice (Java 21). Manages date polling for trips: creating polls, collecting YES/MAYBE/NO
 responses, and locking a winning slot.
 
 **Ports:** REST `8082` · gRPC `9082` (server — not yet used, reserved for future consumers)
