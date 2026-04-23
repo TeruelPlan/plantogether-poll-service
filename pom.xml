@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.plantogether</groupId>
         <artifactId>plantogether-parent</artifactId>
-        <version>1.2.0</version>
+        <version>1.3.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>plantogether-poll-service</artifactId>
@@ -20,7 +20,7 @@
             <dependency>
                 <groupId>com.plantogether</groupId>
                 <artifactId>plantogether-bom</artifactId>
-                <version>1.2.0</version>
+                <version>1.3.0-SNAPSHOT</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
