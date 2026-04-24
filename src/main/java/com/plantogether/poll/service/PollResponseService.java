@@ -16,94 +16,103 @@ import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.repository.PollRepository;
 import com.plantogether.poll.repository.PollResponseRepository;
 import com.plantogether.trip.grpc.TripMemberProto;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.UUID;
-
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class PollResponseService {
 
-    private final PollRepository pollRepository;
-    private final PollResponseRepository pollResponseRepository;
-    private final PollResponseInsertHelper insertHelper;
-    private final TripGrpcClient tripGrpcClient;
-    private final ApplicationEventPublisher applicationEventPublisher;
+  private final PollRepository pollRepository;
+  private final PollResponseRepository pollResponseRepository;
+  private final PollResponseInsertHelper insertHelper;
+  private final TripGrpcClient tripGrpcClient;
+  private final ApplicationEventPublisher applicationEventPublisher;
 
-    public VoteResponse respond(UUID pollId, String deviceId, RespondRequest request) {
-        Poll poll = pollRepository.findById(pollId)
-                .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
+  public VoteResponse respond(UUID pollId, String deviceId, RespondRequest request) {
+    Poll poll =
+        pollRepository
+            .findById(pollId)
+            .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-        tripGrpcClient.requireMember(poll.getTripId().toString(), deviceId);
+    tripGrpcClient.requireMember(poll.getTripId().toString(), deviceId);
 
-        if (poll.getStatus() == PollStatus.LOCKED) {
-            throw new ConflictException("Poll is already locked");
-        }
+    if (poll.getStatus() == PollStatus.LOCKED) {
+      throw new ConflictException("Poll is already locked");
+    }
 
-        PollSlot slot = poll.getSlots().stream()
-                .filter(s -> s.getId().equals(request.getSlotId()))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("PollSlot", request.getSlotId()));
+    PollSlot slot =
+        poll.getSlots().stream()
+            .filter(s -> s.getId().equals(request.getSlotId()))
+            .findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException("PollSlot", request.getSlotId()));
 
-        UUID deviceUuid = UUID.fromString(deviceId);
+    UUID deviceUuid = UUID.fromString(deviceId);
 
-        PollResponse saved = pollResponseRepository
-                .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
-                .map(existing -> {
-                    existing.setStatus(request.getStatus());
-                    return pollResponseRepository.saveAndFlush(existing);
+    PollResponse saved =
+        pollResponseRepository
+            .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
+            .map(
+                existing -> {
+                  existing.setStatus(request.getStatus());
+                  return pollResponseRepository.saveAndFlush(existing);
                 })
-                .orElseGet(() -> insertOrRecover(slot, deviceUuid, request.getStatus()));
+            .orElseGet(() -> insertOrRecover(slot, deviceUuid, request.getStatus()));
 
-        List<PollResponse> slotResponses = pollResponseRepository.findByPollSlot_Id(slot.getId());
-        int newSlotScore = PollScoring.scoreForSlot(slotResponses);
+    List<PollResponse> slotResponses = pollResponseRepository.findByPollSlot_Id(slot.getId());
+    int newSlotScore = PollScoring.scoreForSlot(slotResponses);
 
-        applicationEventPublisher.publishEvent(new PollVoteCastInternalEvent(
-                poll.getId(),
-                poll.getTripId(),
-                slot.getId(),
-                deviceUuid,
-                request.getStatus(),
-                newSlotScore
-        ));
+    applicationEventPublisher.publishEvent(
+        new PollVoteCastInternalEvent(
+            poll.getId(),
+            poll.getTripId(),
+            slot.getId(),
+            deviceUuid,
+            request.getStatus(),
+            newSlotScore));
 
-        return VoteResponse.from(saved);
+    return VoteResponse.from(saved);
+  }
+
+  @Transactional(readOnly = true)
+  public PollDetailResponse getPollDetail(UUID pollId, String deviceId) {
+    Poll poll =
+        pollRepository
+            .findById(pollId)
+            .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
+
+    // Surface gRPC failure as 5xx to the caller — the matrix is meaningless without member columns.
+    // The members list also gates authorization: self-membership is confirmed by presence in the
+    // list,
+    // saving one round-trip compared to a separate IsMember call.
+    List<TripMemberProto> members = tripGrpcClient.getTripMembers(poll.getTripId().toString());
+    boolean isMember = members.stream().anyMatch(m -> deviceId.equals(m.getDeviceId()));
+    if (!isMember) {
+      throw new AccessDeniedException("Device is not a member of this trip");
     }
 
-    @Transactional(readOnly = true)
-    public PollDetailResponse getPollDetail(UUID pollId, String deviceId) {
-        Poll poll = pollRepository.findById(pollId)
-                .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
+    List<PollResponse> responses = pollResponseRepository.findByPollSlot_Poll_Id(pollId);
+    return PollDetailResponse.from(poll, responses, members);
+  }
 
-        // Surface gRPC failure as 5xx to the caller — the matrix is meaningless without member columns.
-        // The members list also gates authorization: self-membership is confirmed by presence in the list,
-        // saving one round-trip compared to a separate IsMember call.
-        List<TripMemberProto> members = tripGrpcClient.getTripMembers(poll.getTripId().toString());
-        boolean isMember = members.stream().anyMatch(m -> deviceId.equals(m.getDeviceId()));
-        if (!isMember) {
-            throw new AccessDeniedException("Device is not a member of this trip");
-        }
-
-        List<PollResponse> responses = pollResponseRepository.findByPollSlot_Poll_Id(pollId);
-        return PollDetailResponse.from(poll, responses, members);
+  private PollResponse insertOrRecover(PollSlot slot, UUID deviceUuid, VoteStatus status) {
+    try {
+      return insertHelper.insertNew(slot, deviceUuid, status);
+    } catch (DataIntegrityViolationException race) {
+      // Concurrent insert on (poll_slot_id, device_id) — re-read in the outer transaction and
+      // update.
+      PollResponse existing =
+          pollResponseRepository
+              .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
+              .orElseThrow(() -> race);
+      existing.setStatus(status);
+      return existing;
     }
-
-    private PollResponse insertOrRecover(PollSlot slot, UUID deviceUuid, VoteStatus status) {
-        try {
-            return insertHelper.insertNew(slot, deviceUuid, status);
-        } catch (DataIntegrityViolationException race) {
-            // Concurrent insert on (poll_slot_id, device_id) — re-read in the outer transaction and update.
-            PollResponse existing = pollResponseRepository
-                    .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
-                    .orElseThrow(() -> race);
-            existing.setStatus(status);
-            return existing;
-        }
-    }
+  }
 }
