@@ -1,0 +1,10 @@
+spring:
+  jpa:
+    show-sql: false
+  flyway:
+    enabled: true
+
+grpc:
+  trip-service:
+    host: localhost
+    port: 9999
