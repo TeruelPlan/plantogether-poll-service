@@ -1,10 +1,9 @@
 package com.plantogether.poll.domain;
 
 import jakarta.persistence.*;
+import java.util.UUID;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
-
-import java.util.UUID;
 
 @Entity
 @Table(name = "poll_response")
@@ -15,20 +14,20 @@ import java.util.UUID;
 @Builder
 public class PollResponse {
 
-    @Id
-    @GeneratedValue
-    @UuidGenerator(style = UuidGenerator.Style.TIME)
-    @Column(updatable = false, nullable = false)
-    private UUID id;
+  @Id
+  @GeneratedValue
+  @UuidGenerator(style = UuidGenerator.Style.TIME)
+  @Column(updatable = false, nullable = false)
+  private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "poll_slot_id", nullable = false)
-    private PollSlot pollSlot;
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "poll_slot_id", nullable = false)
+  private PollSlot pollSlot;
 
-    @Column(name = "device_id", nullable = false)
-    private UUID deviceId;
+  @Column(name = "device_id", nullable = false)
+  private UUID deviceId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
-    private VoteStatus status;
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 10)
+  private VoteStatus status;
 }
