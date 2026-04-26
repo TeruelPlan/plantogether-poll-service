@@ -6,7 +6,6 @@ import com.plantogether.common.exception.ResourceNotFoundException;
 import com.plantogether.common.grpc.Role;
 import com.plantogether.common.grpc.TripClient;
 import com.plantogether.common.grpc.TripMember;
-import com.plantogether.common.grpc.TripMembership;
 import com.plantogether.poll.domain.Poll;
 import com.plantogether.poll.domain.PollSlot;
 import com.plantogether.poll.domain.PollStatus;
@@ -95,8 +94,14 @@ public class PollService {
             .findById(pollId)
             .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-    TripMembership membership = tripClient.requireMembership(poll.getTripId().toString(), deviceId);
-    if (membership.role() != Role.ORGANIZER) {
+    // Fetch remote data BEFORE mutating so a gRPC failure does not roll back a successful lock.
+    List<TripMember> members = tripClient.getTripMembers(poll.getTripId().toString());
+    TripMember self =
+        members.stream()
+            .filter(m -> deviceId.equals(m.deviceId().toString()))
+            .findFirst()
+            .orElseThrow(() -> new AccessDeniedException("Device is not a member of this trip"));
+    if (self.role() != Role.ORGANIZER) {
       throw new AccessDeniedException("Only the trip organizer can lock a poll");
     }
 
@@ -109,9 +114,6 @@ public class PollService {
             .filter(s -> s.getId().equals(slotId))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("Slot does not belong to this poll"));
-
-    // Fetch remote data BEFORE mutating so a gRPC failure does not roll back a successful lock.
-    List<TripMember> members = tripClient.getTripMembers(poll.getTripId().toString());
 
     poll.setStatus(PollStatus.LOCKED);
     poll.setLockedSlotId(slotId);

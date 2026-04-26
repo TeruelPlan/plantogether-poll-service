@@ -1,5 +1,6 @@
 package com.plantogether.poll.dto;
 
+import com.plantogether.common.grpc.Role;
 import com.plantogether.common.grpc.TripMember;
 import com.plantogether.poll.domain.Poll;
 import com.plantogether.poll.domain.PollResponse;
@@ -71,7 +72,7 @@ public class PollDetailResponse {
                 m ->
                     MemberEntry.builder()
                         .deviceId(m.deviceId())
-                        .role(m.role().name())
+                        .role(m.role())
                         .displayName(m.displayName())
                         .build())
             .toList();
@@ -117,7 +118,7 @@ public class PollDetailResponse {
   @AllArgsConstructor
   public static class MemberEntry {
     private UUID deviceId;
-    private String role;
+    private Role role;
     private String displayName;
   }
 }

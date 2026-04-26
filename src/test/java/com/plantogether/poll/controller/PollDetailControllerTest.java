@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.plantogether.common.exception.AccessDeniedException;
 import com.plantogether.common.exception.ConflictException;
 import com.plantogether.common.exception.ResourceNotFoundException;
+import com.plantogether.common.grpc.Role;
 import com.plantogether.common.grpc.TripClient;
 import com.plantogether.common.security.SecurityAutoConfiguration;
 import com.plantogether.poll.dto.PollDetailResponse;
@@ -79,17 +80,17 @@ class PollDetailControllerTest {
         List.of(
             PollDetailResponse.MemberEntry.builder()
                 .deviceId(UUID.randomUUID())
-                .role("ORGANIZER")
+                .role(Role.ORGANIZER)
                 .displayName("Alice")
                 .build(),
             PollDetailResponse.MemberEntry.builder()
                 .deviceId(UUID.randomUUID())
-                .role("PARTICIPANT")
+                .role(Role.PARTICIPANT)
                 .displayName("Bob")
                 .build(),
             PollDetailResponse.MemberEntry.builder()
                 .deviceId(UUID.randomUUID())
-                .role("PARTICIPANT")
+                .role(Role.PARTICIPANT)
                 .displayName("Carol")
                 .build());
     return PollDetailResponse.builder()
