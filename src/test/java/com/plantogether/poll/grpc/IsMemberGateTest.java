@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.plantogether.common.grpc.TripClient;
 import com.plantogether.poll.controller.PollController;
 import com.plantogether.poll.controller.PollDetailController;
 import com.plantogether.poll.domain.Poll;
@@ -17,7 +18,6 @@ import com.plantogether.poll.domain.PollSlot;
 import com.plantogether.poll.domain.PollStatus;
 import com.plantogether.poll.event.publisher.PollEventPublisher.PollCreatedInternalEvent;
 import com.plantogether.poll.exception.GlobalExceptionHandler;
-import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.repository.PollRepository;
 import com.plantogether.poll.repository.PollResponseRepository;
 import com.plantogether.poll.service.PollResponseInsertHelper;
@@ -100,8 +100,8 @@ class IsMemberGateTest {
 
     channel = InProcessChannelBuilder.forName(SERVER_NAME).directExecutor().build();
 
-    TripGrpcClient tripGrpcClient = new TripGrpcClient();
-    tripGrpcClient.setStub(TripServiceGrpc.newBlockingStub(channel));
+    TripClient tripClient =
+        new com.plantogether.common.grpc.TripGrpcClient(TripServiceGrpc.newBlockingStub(channel));
 
     PollRepository pollRepository = mock(PollRepository.class);
     applicationEventPublisher = mock(ApplicationEventPublisher.class);
@@ -117,7 +117,7 @@ class IsMemberGateTest {
     pollResponseRepository = mock(PollResponseRepository.class);
     PollService pollService =
         new PollService(
-            pollRepository, pollResponseRepository, tripGrpcClient, applicationEventPublisher);
+            pollRepository, pollResponseRepository, tripClient, applicationEventPublisher);
     PollController controller = new PollController(pollService);
 
     existingPoll =
@@ -170,7 +170,7 @@ class IsMemberGateTest {
             pollRepository,
             pollResponseRepository,
             insertHelper,
-            tripGrpcClient,
+            tripClient,
             applicationEventPublisher);
     PollDetailController detailController =
         new PollDetailController(pollResponseService, pollService);

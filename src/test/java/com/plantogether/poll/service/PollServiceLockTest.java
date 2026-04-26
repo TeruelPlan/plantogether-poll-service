@@ -7,15 +7,16 @@ import static org.mockito.Mockito.*;
 import com.plantogether.common.exception.AccessDeniedException;
 import com.plantogether.common.exception.ConflictException;
 import com.plantogether.common.exception.ResourceNotFoundException;
+import com.plantogether.common.grpc.Role;
+import com.plantogether.common.grpc.TripClient;
+import com.plantogether.common.grpc.TripMembership;
 import com.plantogether.poll.domain.Poll;
 import com.plantogether.poll.domain.PollSlot;
 import com.plantogether.poll.domain.PollStatus;
 import com.plantogether.poll.dto.PollDetailResponse;
 import com.plantogether.poll.event.publisher.PollEventPublisher.PollLockedInternalEvent;
-import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.repository.PollRepository;
 import com.plantogether.poll.repository.PollResponseRepository;
-import com.plantogether.trip.grpc.IsMemberResponse;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -35,7 +36,7 @@ class PollServiceLockTest {
 
   @Mock PollRepository pollRepository;
   @Mock PollResponseRepository pollResponseRepository;
-  @Mock TripGrpcClient tripGrpcClient;
+  @Mock TripClient tripClient;
   @Mock ApplicationEventPublisher applicationEventPublisher;
 
   @InjectMocks PollService pollService;
@@ -77,9 +78,9 @@ class PollServiceLockTest {
   @Test
   void lockPoll_organizer_updatesStatusAndPublishesEvent() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripGrpcClient.isMember(tripId.toString(), organizerDeviceId))
-        .thenReturn(IsMemberResponse.newBuilder().setIsMember(true).setRole("ORGANIZER").build());
-    when(tripGrpcClient.getTripMembers(tripId.toString())).thenReturn(List.of());
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenReturn(new TripMembership(true, Role.ORGANIZER));
+    when(tripClient.getTripMembers(tripId.toString())).thenReturn(List.of());
     when(pollResponseRepository.findByPollSlot_Poll_Id(pollId)).thenReturn(List.of());
 
     PollDetailResponse result = pollService.lockPoll(pollId, organizerDeviceId, slotId);
@@ -105,8 +106,8 @@ class PollServiceLockTest {
   @Test
   void lockPoll_participant_throwsAccessDenied() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripGrpcClient.isMember(tripId.toString(), organizerDeviceId))
-        .thenReturn(IsMemberResponse.newBuilder().setIsMember(true).setRole("PARTICIPANT").build());
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenReturn(new TripMembership(true, Role.PARTICIPANT));
 
     AccessDeniedException ex =
         assertThrows(
@@ -120,8 +121,10 @@ class PollServiceLockTest {
   @Test
   void lockPoll_nonMember_throwsAccessDenied() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripGrpcClient.isMember(tripId.toString(), organizerDeviceId))
-        .thenReturn(IsMemberResponse.newBuilder().setIsMember(false).build());
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenThrow(
+            new com.plantogether.common.exception.AccessDeniedException(
+                "Device is not a member of this trip"));
 
     assertThrows(
         AccessDeniedException.class, () -> pollService.lockPoll(pollId, organizerDeviceId, slotId));
@@ -133,8 +136,8 @@ class PollServiceLockTest {
   void lockPoll_alreadyLocked_throwsConflict() {
     poll.setStatus(PollStatus.LOCKED);
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripGrpcClient.isMember(tripId.toString(), organizerDeviceId))
-        .thenReturn(IsMemberResponse.newBuilder().setIsMember(true).setRole("ORGANIZER").build());
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenReturn(new TripMembership(true, Role.ORGANIZER));
 
     assertThrows(
         ConflictException.class, () -> pollService.lockPoll(pollId, organizerDeviceId, slotId));
@@ -145,8 +148,8 @@ class PollServiceLockTest {
   @Test
   void lockPoll_slotNotInPoll_throwsIllegalArgument() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripGrpcClient.isMember(tripId.toString(), organizerDeviceId))
-        .thenReturn(IsMemberResponse.newBuilder().setIsMember(true).setRole("ORGANIZER").build());
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenReturn(new TripMembership(true, Role.ORGANIZER));
 
     UUID unknownSlotId = UUID.randomUUID();
     assertThrows(
@@ -162,6 +165,6 @@ class PollServiceLockTest {
     assertThrows(
         ResourceNotFoundException.class,
         () -> pollService.lockPoll(pollId, organizerDeviceId, slotId));
-    verifyNoInteractions(tripGrpcClient);
+    verifyNoInteractions(tripClient);
   }
 }

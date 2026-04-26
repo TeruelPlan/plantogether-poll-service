@@ -1,18 +1,10 @@
 package com.plantogether.poll;
 
-import com.plantogether.poll.grpc.client.TripGrpcClient;
-import com.plantogether.trip.grpc.TripServiceGrpc;
-import io.grpc.ManagedChannel;
-import io.grpc.Server;
-import io.grpc.inprocess.InProcessChannelBuilder;
-import io.grpc.inprocess.InProcessServerBuilder;
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import com.plantogether.common.grpc.TripClient;
 import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -59,33 +51,6 @@ public abstract class AbstractIntegrationTest {
   }
 
   @Autowired protected TestRestTemplate restTemplate;
-  @Autowired protected TripGrpcClient tripGrpcClient;
 
-  private Server grpcServer;
-  private ManagedChannel grpcChannel;
-
-  @BeforeEach
-  void startInProcessGrpc() throws IOException {
-    String serverName = InProcessServerBuilder.generateName();
-    grpcServer =
-        InProcessServerBuilder.forName(serverName)
-            .directExecutor()
-            .addService(fakeTripService())
-            .build()
-            .start();
-    grpcChannel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
-    tripGrpcClient.setStub(TripServiceGrpc.newBlockingStub(grpcChannel));
-  }
-
-  @AfterEach
-  void stopInProcessGrpc() throws InterruptedException {
-    if (grpcChannel != null) {
-      grpcChannel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
-    }
-    if (grpcServer != null) {
-      grpcServer.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
-    }
-  }
-
-  protected abstract TripServiceGrpc.TripServiceImplBase fakeTripService();
+  @MockBean protected TripClient tripClient;
 }

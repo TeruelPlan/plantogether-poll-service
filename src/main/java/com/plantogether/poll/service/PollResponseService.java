@@ -3,6 +3,8 @@ package com.plantogether.poll.service;
 import com.plantogether.common.exception.AccessDeniedException;
 import com.plantogether.common.exception.ConflictException;
 import com.plantogether.common.exception.ResourceNotFoundException;
+import com.plantogether.common.grpc.TripClient;
+import com.plantogether.common.grpc.TripMember;
 import com.plantogether.poll.domain.Poll;
 import com.plantogether.poll.domain.PollResponse;
 import com.plantogether.poll.domain.PollSlot;
@@ -12,10 +14,8 @@ import com.plantogether.poll.dto.PollDetailResponse;
 import com.plantogether.poll.dto.RespondRequest;
 import com.plantogether.poll.dto.VoteResponse;
 import com.plantogether.poll.event.publisher.PollRealtimeBroadcaster.PollVoteCastInternalEvent;
-import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.repository.PollRepository;
 import com.plantogether.poll.repository.PollResponseRepository;
-import com.plantogether.trip.grpc.TripMemberProto;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +32,7 @@ public class PollResponseService {
   private final PollRepository pollRepository;
   private final PollResponseRepository pollResponseRepository;
   private final PollResponseInsertHelper insertHelper;
-  private final TripGrpcClient tripGrpcClient;
+  private final TripClient tripClient;
   private final ApplicationEventPublisher applicationEventPublisher;
 
   public VoteResponse respond(UUID pollId, String deviceId, RespondRequest request) {
@@ -41,7 +41,7 @@ public class PollResponseService {
             .findById(pollId)
             .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-    tripGrpcClient.requireMember(poll.getTripId().toString(), deviceId);
+    tripClient.requireMembership(poll.getTripId().toString(), deviceId);
 
     if (poll.getStatus() == PollStatus.LOCKED) {
       throw new ConflictException("Poll is already locked");
@@ -91,8 +91,8 @@ public class PollResponseService {
     // The members list also gates authorization: self-membership is confirmed by presence in the
     // list,
     // saving one round-trip compared to a separate IsMember call.
-    List<TripMemberProto> members = tripGrpcClient.getTripMembers(poll.getTripId().toString());
-    boolean isMember = members.stream().anyMatch(m -> deviceId.equals(m.getDeviceId()));
+    List<TripMember> members = tripClient.getTripMembers(poll.getTripId().toString());
+    boolean isMember = members.stream().anyMatch(m -> deviceId.equals(m.deviceId().toString()));
     if (!isMember) {
       throw new AccessDeniedException("Device is not a member of this trip");
     }

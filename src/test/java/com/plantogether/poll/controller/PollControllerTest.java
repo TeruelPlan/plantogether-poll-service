@@ -9,9 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.plantogether.common.exception.AccessDeniedException;
+import com.plantogether.common.grpc.TripClient;
 import com.plantogether.common.security.SecurityAutoConfiguration;
 import com.plantogether.poll.dto.PollResponse;
-import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.service.PollService;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -41,11 +41,11 @@ class PollControllerTest {
 
   @MockBean private PollService pollService;
 
-  @MockBean private TripGrpcClient tripGrpcClient;
+  @MockBean private TripClient tripClient;
 
   @AfterEach
   void tearDown() {
-    Mockito.reset(pollService, tripGrpcClient);
+    Mockito.reset(pollService, tripClient);
   }
 
   private String validBody() {

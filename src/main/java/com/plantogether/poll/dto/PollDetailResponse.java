@@ -1,9 +1,9 @@
 package com.plantogether.poll.dto;
 
+import com.plantogether.common.grpc.TripMember;
 import com.plantogether.poll.domain.Poll;
 import com.plantogether.poll.domain.PollResponse;
 import com.plantogether.poll.service.PollScoring;
-import com.plantogether.trip.grpc.TripMemberProto;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -32,7 +32,7 @@ public class PollDetailResponse {
   private List<MemberEntry> members;
 
   public static PollDetailResponse from(
-      Poll poll, List<PollResponse> responses, List<TripMemberProto> members) {
+      Poll poll, List<PollResponse> responses, List<TripMember> members) {
     Map<UUID, List<PollResponse>> responsesBySlot =
         responses.stream().collect(Collectors.groupingBy(r -> r.getPollSlot().getId()));
 
@@ -70,9 +70,9 @@ public class PollDetailResponse {
             .map(
                 m ->
                     MemberEntry.builder()
-                        .deviceId(UUID.fromString(m.getDeviceId()))
-                        .role(m.getRole())
-                        .displayName(m.getDisplayName())
+                        .deviceId(m.deviceId())
+                        .role(m.role().name())
+                        .displayName(m.displayName())
                         .build())
             .toList();
 

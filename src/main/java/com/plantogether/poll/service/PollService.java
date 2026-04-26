@@ -3,6 +3,10 @@ package com.plantogether.poll.service;
 import com.plantogether.common.exception.AccessDeniedException;
 import com.plantogether.common.exception.ConflictException;
 import com.plantogether.common.exception.ResourceNotFoundException;
+import com.plantogether.common.grpc.Role;
+import com.plantogether.common.grpc.TripClient;
+import com.plantogether.common.grpc.TripMember;
+import com.plantogether.common.grpc.TripMembership;
 import com.plantogether.poll.domain.Poll;
 import com.plantogether.poll.domain.PollSlot;
 import com.plantogether.poll.domain.PollStatus;
@@ -11,11 +15,8 @@ import com.plantogether.poll.dto.PollDetailResponse;
 import com.plantogether.poll.dto.PollResponse;
 import com.plantogether.poll.event.publisher.PollEventPublisher.PollCreatedInternalEvent;
 import com.plantogether.poll.event.publisher.PollEventPublisher.PollLockedInternalEvent;
-import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.repository.PollRepository;
 import com.plantogether.poll.repository.PollResponseRepository;
-import com.plantogether.trip.grpc.IsMemberResponse;
-import com.plantogether.trip.grpc.TripMemberProto;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -30,18 +31,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class PollService {
 
-  private static final String ROLE_ORGANIZER = "ORGANIZER";
-
   private final PollRepository pollRepository;
   private final PollResponseRepository pollResponseRepository;
-  private final TripGrpcClient tripGrpcClient;
+  private final TripClient tripClient;
   private final ApplicationEventPublisher applicationEventPublisher;
 
   public PollResponse createPoll(UUID tripId, String deviceId, CreatePollRequest request) {
-    IsMemberResponse membership = tripGrpcClient.isMember(tripId.toString(), deviceId);
-    if (!membership.getIsMember()) {
-      throw new AccessDeniedException("Device is not a member of this trip");
-    }
+    tripClient.requireMembership(tripId.toString(), deviceId);
 
     Instant now = Instant.now();
     Poll poll =
@@ -86,10 +82,7 @@ public class PollService {
 
   @Transactional(readOnly = true)
   public List<PollResponse> getPollsForTrip(UUID tripId, String deviceId) {
-    IsMemberResponse membership = tripGrpcClient.isMember(tripId.toString(), deviceId);
-    if (!membership.getIsMember()) {
-      throw new AccessDeniedException("Device is not a member of this trip");
-    }
+    tripClient.requireMembership(tripId.toString(), deviceId);
 
     return pollRepository.findByTripIdOrderByCreatedAtDesc(tripId).stream()
         .map(PollResponse::from)
@@ -102,11 +95,8 @@ public class PollService {
             .findById(pollId)
             .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-    IsMemberResponse membership = tripGrpcClient.isMember(poll.getTripId().toString(), deviceId);
-    if (!membership.getIsMember()) {
-      throw new AccessDeniedException("Device is not a member of this trip");
-    }
-    if (!ROLE_ORGANIZER.equals(membership.getRole())) {
+    TripMembership membership = tripClient.requireMembership(poll.getTripId().toString(), deviceId);
+    if (membership.role() != Role.ORGANIZER) {
       throw new AccessDeniedException("Only the trip organizer can lock a poll");
     }
 
@@ -121,7 +111,7 @@ public class PollService {
             .orElseThrow(() -> new IllegalArgumentException("Slot does not belong to this poll"));
 
     // Fetch remote data BEFORE mutating so a gRPC failure does not roll back a successful lock.
-    List<TripMemberProto> members = tripGrpcClient.getTripMembers(poll.getTripId().toString());
+    List<TripMember> members = tripClient.getTripMembers(poll.getTripId().toString());
 
     poll.setStatus(PollStatus.LOCKED);
     poll.setLockedSlotId(slotId);

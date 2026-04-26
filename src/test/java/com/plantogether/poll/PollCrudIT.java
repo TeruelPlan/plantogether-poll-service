@@ -1,16 +1,17 @@
 package com.plantogether.poll;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
+import com.plantogether.common.grpc.Role;
+import com.plantogether.common.grpc.TripMembership;
 import com.plantogether.poll.dto.CreatePollRequest;
 import com.plantogether.poll.dto.PollResponse;
-import com.plantogether.trip.grpc.IsMemberRequest;
-import com.plantogether.trip.grpc.IsMemberResponse;
-import com.plantogether.trip.grpc.TripServiceGrpc;
-import io.grpc.stub.StreamObserver;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -22,17 +23,11 @@ import org.springframework.http.ResponseEntity;
 
 class PollCrudIT extends AbstractIntegrationTest {
 
-  @Override
-  protected TripServiceGrpc.TripServiceImplBase fakeTripService() {
-    return new TripServiceGrpc.TripServiceImplBase() {
-      @Override
-      public void isMember(
-          IsMemberRequest request, StreamObserver<IsMemberResponse> responseObserver) {
-        responseObserver.onNext(
-            IsMemberResponse.newBuilder().setIsMember(true).setRole("ORGANIZER").build());
-        responseObserver.onCompleted();
-      }
-    };
+  @BeforeEach
+  void stubTripClient() {
+    when(tripClient.requireMembership(anyString(), anyString()))
+        .thenReturn(new TripMembership(true, Role.ORGANIZER));
+    when(tripClient.isMember(anyString(), anyString())).thenReturn(true);
   }
 
   private HttpHeaders headers(UUID deviceId) {

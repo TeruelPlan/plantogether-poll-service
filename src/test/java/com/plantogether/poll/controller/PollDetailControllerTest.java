@@ -11,10 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.plantogether.common.exception.AccessDeniedException;
 import com.plantogether.common.exception.ConflictException;
 import com.plantogether.common.exception.ResourceNotFoundException;
+import com.plantogether.common.grpc.TripClient;
 import com.plantogether.common.security.SecurityAutoConfiguration;
 import com.plantogether.poll.dto.PollDetailResponse;
 import com.plantogether.poll.dto.VoteResponse;
-import com.plantogether.poll.grpc.client.TripGrpcClient;
 import com.plantogether.poll.service.PollResponseService;
 import com.plantogether.poll.service.PollService;
 import java.time.Instant;
@@ -44,11 +44,11 @@ class PollDetailControllerTest {
 
   @MockBean private PollService pollService;
 
-  @MockBean private TripGrpcClient tripGrpcClient;
+  @MockBean private TripClient tripClient;
 
   @AfterEach
   void tearDown() {
-    Mockito.reset(pollResponseService, pollService, tripGrpcClient);
+    Mockito.reset(pollResponseService, pollService, tripClient);
   }
 
   private String validBody() {
