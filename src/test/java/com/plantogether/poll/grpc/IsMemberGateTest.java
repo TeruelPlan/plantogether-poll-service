@@ -152,7 +152,7 @@ class IsMemberGateTest {
 
     PollResponseInsertHelper insertHelper = mock(PollResponseInsertHelper.class);
     insertHelperRef = insertHelper;
-    when(insertHelper.insertNew(any(), any(), any()))
+    when(insertHelper.insertNew(any(), any(), any(), any()))
         .thenAnswer(
             inv -> {
               PollResponse pr =
@@ -160,7 +160,8 @@ class IsMemberGateTest {
                       .id(UUID.randomUUID())
                       .pollSlot(inv.getArgument(0))
                       .deviceId(inv.getArgument(1))
-                      .status(inv.getArgument(2))
+                      .tripMemberId(inv.getArgument(2))
+                      .status(inv.getArgument(3))
                       .build();
               return pr;
             });
@@ -251,7 +252,7 @@ class IsMemberGateTest {
 
     assertThat(mockTripService.callCount).isEqualTo(1);
     verify(pollResponseRepository, org.mockito.Mockito.never()).save(any(PollResponse.class));
-    verify(insertHelperRef, org.mockito.Mockito.never()).insertNew(any(), any(), any());
+    verify(insertHelperRef, org.mockito.Mockito.never()).insertNew(any(), any(), any(), any());
   }
 
   @Test
@@ -273,7 +274,7 @@ class IsMemberGateTest {
         .andExpect(status().isOk());
 
     assertThat(mockTripService.callCount).isEqualTo(1);
-    verify(insertHelperRef).insertNew(any(), any(), any());
+    verify(insertHelperRef).insertNew(any(), any(), any(), any());
   }
 
   @Test

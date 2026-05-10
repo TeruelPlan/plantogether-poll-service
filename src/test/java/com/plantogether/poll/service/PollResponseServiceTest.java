@@ -114,7 +114,7 @@ class PollResponseServiceTest {
     stubMember(true);
     when(pollResponseRepository.findByPollSlot_IdAndDeviceId(slotAId, deviceUuid))
         .thenReturn(Optional.empty());
-    when(insertHelper.insertNew(slotA, deviceUuid, VoteStatus.YES))
+    when(insertHelper.insertNew(slotA, deviceUuid, null, VoteStatus.YES))
         .thenAnswer(
             inv -> {
               PollResponse pr =
@@ -146,7 +146,7 @@ class PollResponseServiceTest {
     assertEquals("YES", result.getStatus());
     assertEquals(deviceUuid, result.getDeviceId());
 
-    verify(insertHelper).insertNew(slotA, deviceUuid, VoteStatus.YES);
+    verify(insertHelper).insertNew(slotA, deviceUuid, null, VoteStatus.YES);
   }
 
   @Test
@@ -259,7 +259,7 @@ class PollResponseServiceTest {
             .deviceId(deviceUuid)
             .status(VoteStatus.YES)
             .build();
-    when(insertHelper.insertNew(slotA, deviceUuid, VoteStatus.YES)).thenReturn(inserted);
+    when(insertHelper.insertNew(slotA, deviceUuid, null, VoteStatus.YES)).thenReturn(inserted);
     when(pollResponseRepository.findByPollSlot_Id(slotAId)).thenReturn(List.of(inserted));
 
     service.respond(
@@ -291,7 +291,7 @@ class PollResponseServiceTest {
                     .deviceId(deviceUuid)
                     .status(VoteStatus.MAYBE)
                     .build())); // race re-lookup
-    when(insertHelper.insertNew(slotA, deviceUuid, VoteStatus.YES))
+    when(insertHelper.insertNew(slotA, deviceUuid, null, VoteStatus.YES))
         .thenThrow(new DataIntegrityViolationException("duplicate key"));
     when(pollResponseRepository.findByPollSlot_Id(slotAId))
         .thenReturn(

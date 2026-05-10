@@ -36,7 +36,7 @@ public class PollService {
   private final ApplicationEventPublisher applicationEventPublisher;
 
   public PollResponse createPoll(UUID tripId, String deviceId, CreatePollRequest request) {
-    tripClient.requireMembership(tripId.toString(), deviceId);
+    var membership = tripClient.requireMembership(tripId.toString(), deviceId);
 
     Instant now = Instant.now();
     Poll poll =
@@ -45,6 +45,10 @@ public class PollService {
             .title(request.getTitle())
             .status(PollStatus.OPEN)
             .createdBy(UUID.fromString(deviceId))
+            .createdByTripMemberId(
+                membership.tripMemberId() != null
+                    ? UUID.fromString(membership.tripMemberId())
+                    : null)
             .createdAt(now)
             .updatedAt(now)
             .build();

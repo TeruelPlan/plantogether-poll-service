@@ -27,6 +27,9 @@ public class PollResponse {
   @Column(name = "device_id", nullable = false)
   private UUID deviceId;
 
+  @Column(name = "trip_member_id")
+  private UUID tripMemberId;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 10)
   private VoteStatus status;

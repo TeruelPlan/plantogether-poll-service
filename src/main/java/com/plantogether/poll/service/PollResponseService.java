@@ -41,7 +41,9 @@ public class PollResponseService {
             .findById(pollId)
             .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-    tripClient.requireMembership(poll.getTripId().toString(), deviceId);
+    var membership = tripClient.requireMembership(poll.getTripId().toString(), deviceId);
+    UUID memberUuid =
+        membership.tripMemberId() != null ? UUID.fromString(membership.tripMemberId()) : null;
 
     if (poll.getStatus() == PollStatus.LOCKED) {
       throw new ConflictException("Poll is already locked");
@@ -61,9 +63,12 @@ public class PollResponseService {
             .map(
                 existing -> {
                   existing.setStatus(request.getStatus());
+                  if (existing.getTripMemberId() == null && memberUuid != null) {
+                    existing.setTripMemberId(memberUuid);
+                  }
                   return pollResponseRepository.saveAndFlush(existing);
                 })
-            .orElseGet(() -> insertOrRecover(slot, deviceUuid, request.getStatus()));
+            .orElseGet(() -> insertOrRecover(slot, deviceUuid, memberUuid, request.getStatus()));
 
     List<PollResponse> slotResponses = pollResponseRepository.findByPollSlot_Id(slot.getId());
     int newSlotScore = PollScoring.scoreForSlot(slotResponses);
@@ -74,6 +79,7 @@ public class PollResponseService {
             poll.getTripId(),
             slot.getId(),
             deviceUuid,
+            memberUuid,
             request.getStatus(),
             newSlotScore));
 
@@ -101,9 +107,10 @@ public class PollResponseService {
     return PollDetailResponse.from(poll, responses, members);
   }
 
-  private PollResponse insertOrRecover(PollSlot slot, UUID deviceUuid, VoteStatus status) {
+  private PollResponse insertOrRecover(
+      PollSlot slot, UUID deviceUuid, UUID memberUuid, VoteStatus status) {
     try {
-      return insertHelper.insertNew(slot, deviceUuid, status);
+      return insertHelper.insertNew(slot, deviceUuid, memberUuid, status);
     } catch (DataIntegrityViolationException race) {
       // Concurrent insert on (poll_slot_id, device_id) — re-read in the outer transaction and
       // update.
@@ -112,6 +119,9 @@ public class PollResponseService {
               .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
               .orElseThrow(() -> race);
       existing.setStatus(status);
+      if (existing.getTripMemberId() == null && memberUuid != null) {
+        existing.setTripMemberId(memberUuid);
+      }
       return existing;
     }
   }

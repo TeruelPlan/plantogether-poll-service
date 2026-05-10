@@ -39,6 +39,9 @@ public class Poll {
   @Column(name = "created_by", nullable = false)
   private UUID createdBy;
 
+  @Column(name = "created_by_trip_member_id")
+  private UUID createdByTripMemberId;
+
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
 
