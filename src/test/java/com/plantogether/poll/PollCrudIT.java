@@ -26,7 +26,7 @@ class PollCrudIT extends AbstractIntegrationTest {
   @BeforeEach
   void stubTripClient() {
     when(tripClient.requireMembership(anyString(), anyString()))
-        .thenReturn(new TripMembership(true, Role.ORGANIZER));
+        .thenReturn(new TripMembership(true, Role.ORGANIZER, UUID.randomUUID().toString()));
     when(tripClient.isMember(anyString(), anyString())).thenReturn(true);
   }
 

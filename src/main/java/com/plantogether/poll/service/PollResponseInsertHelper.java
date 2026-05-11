@@ -17,17 +17,9 @@ public class PollResponseInsertHelper {
   private final PollResponseRepository pollResponseRepository;
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public PollResponse insertNew(
-      PollSlot slot, UUID deviceId, UUID tripMemberId, VoteStatus status) {
+  public PollResponse insertNew(PollSlot slot, UUID tripMemberId, VoteStatus status) {
     PollResponse vote =
-        PollResponse.builder()
-            .pollSlot(slot)
-            .deviceId(deviceId)
-            .tripMemberId(tripMemberId)
-            .status(status)
-            .build();
-    // saveAndFlush ensures DataIntegrityViolationException surfaces inside this method
-    // rather than being deferred to commit, so the caller can recover gracefully.
+        PollResponse.builder().pollSlot(slot).tripMemberId(tripMemberId).status(status).build();
     return pollResponseRepository.saveAndFlush(vote);
   }
 }

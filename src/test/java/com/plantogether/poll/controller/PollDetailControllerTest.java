@@ -63,7 +63,11 @@ class PollDetailControllerTest {
   }
 
   private VoteResponse sampleVote() {
-    return VoteResponse.builder().slotId(slotId).status("YES").deviceId(deviceId).build();
+    return VoteResponse.builder()
+        .slotId(slotId)
+        .status("YES")
+        .tripMemberId(UUID.randomUUID())
+        .build();
   }
 
   private PollDetailResponse sampleDetail() {
@@ -79,17 +83,17 @@ class PollDetailControllerTest {
     List<PollDetailResponse.MemberEntry> members =
         List.of(
             PollDetailResponse.MemberEntry.builder()
-                .deviceId(UUID.randomUUID())
+                .tripMemberId(UUID.randomUUID())
                 .role(Role.ORGANIZER)
                 .displayName("Alice")
                 .build(),
             PollDetailResponse.MemberEntry.builder()
-                .deviceId(UUID.randomUUID())
+                .tripMemberId(UUID.randomUUID())
                 .role(Role.PARTICIPANT)
                 .displayName("Bob")
                 .build(),
             PollDetailResponse.MemberEntry.builder()
-                .deviceId(UUID.randomUUID())
+                .tripMemberId(UUID.randomUUID())
                 .role(Role.PARTICIPANT)
                 .displayName("Carol")
                 .build());
@@ -99,7 +103,7 @@ class PollDetailControllerTest {
         .title("When to leave?")
         .status("OPEN")
         .lockedSlotId(null)
-        .createdBy(UUID.randomUUID())
+        .createdByMemberId(UUID.randomUUID())
         .createdAt(Instant.now())
         .slots(List.of(slot))
         .members(members)

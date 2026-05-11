@@ -36,10 +36,7 @@ public class Poll {
   @Column(name = "locked_slot_id")
   private UUID lockedSlotId;
 
-  @Column(name = "created_by", nullable = false)
-  private UUID createdBy;
-
-  @Column(name = "created_by_trip_member_id")
+  @Column(name = "created_by_trip_member_id", nullable = false)
   private UUID createdByTripMemberId;
 
   @Column(name = "created_at", nullable = false)

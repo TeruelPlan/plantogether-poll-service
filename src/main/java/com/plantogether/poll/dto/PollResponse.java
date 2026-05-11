@@ -20,7 +20,7 @@ public class PollResponse {
   private UUID tripId;
   private String title;
   private String status;
-  private UUID createdBy;
+  private UUID createdByMemberId;
   private Instant createdAt;
   private List<SlotResponse> slots;
 
@@ -42,7 +42,7 @@ public class PollResponse {
         .tripId(poll.getTripId())
         .title(poll.getTitle())
         .status(poll.getStatus().name())
-        .createdBy(poll.getCreatedBy())
+        .createdByMemberId(poll.getCreatedByTripMemberId())
         .createdAt(poll.getCreatedAt())
         .slots(slotResponses)
         .build();

@@ -24,10 +24,7 @@ public class PollResponse {
   @JoinColumn(name = "poll_slot_id", nullable = false)
   private PollSlot pollSlot;
 
-  @Column(name = "device_id", nullable = false)
-  private UUID deviceId;
-
-  @Column(name = "trip_member_id")
+  @Column(name = "trip_member_id", nullable = false)
   private UUID tripMemberId;
 
   @Enumerated(EnumType.STRING)
