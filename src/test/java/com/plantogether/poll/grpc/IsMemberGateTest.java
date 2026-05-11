@@ -126,7 +126,7 @@ class IsMemberGateTest {
             .tripId(UUID.randomUUID())
             .title("When?")
             .status(PollStatus.OPEN)
-            .createdBy(UUID.randomUUID())
+            .createdByTripMemberId(UUID.randomUUID())
             .createdAt(Instant.now())
             .updatedAt(Instant.now())
             .build();
@@ -140,7 +140,7 @@ class IsMemberGateTest {
             .build();
     existingPoll.getSlots().add(existingSlot);
     when(pollRepository.findById(existingPoll.getId())).thenReturn(Optional.of(existingPoll));
-    when(pollResponseRepository.findByPollSlot_IdAndDeviceId(any(), any()))
+    when(pollResponseRepository.findByPollSlot_IdAndTripMemberId(any(), any()))
         .thenReturn(Optional.empty());
     when(pollResponseRepository.save(any(PollResponse.class)))
         .thenAnswer(
@@ -159,7 +159,7 @@ class IsMemberGateTest {
                   PollResponse.builder()
                       .id(UUID.randomUUID())
                       .pollSlot(inv.getArgument(0))
-                      .deviceId(inv.getArgument(1))
+                      .tripMemberId(inv.getArgument(1))
                       .status(inv.getArgument(2))
                       .build();
               return pr;
@@ -311,7 +311,11 @@ class IsMemberGateTest {
       callCount++;
       lastRequest = request;
       responseObserver.onNext(
-          IsMemberResponse.newBuilder().setIsMember(memberResult).setRole(roleResult).build());
+          IsMemberResponse.newBuilder()
+              .setIsMember(memberResult)
+              .setRole(roleResult)
+              .setTripMemberId(UUID.randomUUID().toString())
+              .build());
       responseObserver.onCompleted();
     }
   }

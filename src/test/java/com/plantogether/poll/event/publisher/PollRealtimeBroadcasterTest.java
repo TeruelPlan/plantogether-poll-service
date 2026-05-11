@@ -35,10 +35,10 @@ class PollRealtimeBroadcasterTest {
     UUID pollId = UUID.randomUUID();
     UUID tripId = UUID.randomUUID();
     UUID slotId = UUID.randomUUID();
-    UUID deviceId = UUID.randomUUID();
+    UUID memberId = UUID.randomUUID();
 
     broadcaster.onVoteCast(
-        new PollVoteCastInternalEvent(pollId, tripId, slotId, deviceId, VoteStatus.YES, 4));
+        new PollVoteCastInternalEvent(pollId, tripId, slotId, memberId, VoteStatus.YES, 4));
 
     ArgumentCaptor<PollVoteCastEvent> rabbitEvent =
         ArgumentCaptor.forClass(PollVoteCastEvent.class);
@@ -51,7 +51,7 @@ class PollRealtimeBroadcasterTest {
     assertEquals(pollId.toString(), event.getPollId());
     assertEquals(tripId.toString(), event.getTripId());
     assertEquals(slotId.toString(), event.getSlotId());
-    assertEquals(deviceId.toString(), event.getDeviceId());
+    assertEquals(memberId.toString(), event.getTripMemberId());
     assertEquals("YES", event.getStatus());
     assertEquals(4, event.getNewSlotScore());
     assertNotNull(event.getOccurredAt());

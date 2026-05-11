@@ -67,7 +67,7 @@ class PollControllerTest {
         .tripId(tripId)
         .title("When to leave?")
         .status("OPEN")
-        .createdBy(deviceId)
+        .createdByMemberId(UUID.randomUUID())
         .createdAt(Instant.now())
         .slots(
             List.of(

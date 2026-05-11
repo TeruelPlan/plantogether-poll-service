@@ -36,7 +36,7 @@ public class PollService {
   private final ApplicationEventPublisher applicationEventPublisher;
 
   public PollResponse createPoll(UUID tripId, String deviceId, CreatePollRequest request) {
-    tripClient.requireMembership(tripId.toString(), deviceId);
+    var membership = tripClient.requireMembership(tripId.toString(), deviceId);
 
     Instant now = Instant.now();
     Poll poll =
@@ -44,7 +44,7 @@ public class PollService {
             .tripId(tripId)
             .title(request.getTitle())
             .status(PollStatus.OPEN)
-            .createdBy(UUID.fromString(deviceId))
+            .createdByTripMemberId(UUID.fromString(membership.tripMemberId()))
             .createdAt(now)
             .updatedAt(now)
             .build();
@@ -94,14 +94,8 @@ public class PollService {
             .findById(pollId)
             .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-    // Fetch remote data BEFORE mutating so a gRPC failure does not roll back a successful lock.
-    List<TripMember> members = tripClient.getTripMembers(poll.getTripId().toString());
-    TripMember self =
-        members.stream()
-            .filter(m -> deviceId.equals(m.deviceId().toString()))
-            .findFirst()
-            .orElseThrow(() -> new AccessDeniedException("Device is not a member of this trip"));
-    if (self.role() != Role.ORGANIZER) {
+    var membership = tripClient.requireMembership(poll.getTripId().toString(), deviceId);
+    if (membership.role() != Role.ORGANIZER) {
       throw new AccessDeniedException("Only the trip organizer can lock a poll");
     }
 
@@ -120,6 +114,10 @@ public class PollService {
     poll.setUpdatedAt(Instant.now());
     pollRepository.saveAndFlush(poll);
 
+    // Fetched after the lock is persisted so the matrix returned to the caller reflects
+    // the latest state. A gRPC failure here surfaces to the caller as 5xx but the lock is
+    // already committed (acceptable: the next read will succeed).
+    List<TripMember> members = tripClient.getTripMembers(poll.getTripId().toString());
     List<com.plantogether.poll.domain.PollResponse> responses =
         pollResponseRepository.findByPollSlot_Poll_Id(poll.getId());
 

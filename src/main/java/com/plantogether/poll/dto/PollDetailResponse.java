@@ -27,7 +27,7 @@ public class PollDetailResponse {
   private String title;
   private String status;
   private UUID lockedSlotId;
-  private UUID createdBy;
+  private UUID createdByMemberId;
   private Instant createdAt;
   private List<SlotDetailResponse> slots;
   private List<MemberEntry> members;
@@ -50,7 +50,7 @@ public class PollDetailResponse {
                           .map(
                               r ->
                                   VoteEntry.builder()
-                                      .deviceId(r.getDeviceId())
+                                      .tripMemberId(r.getTripMemberId())
                                       .status(r.getStatus().name())
                                       .build())
                           .toList();
@@ -71,7 +71,7 @@ public class PollDetailResponse {
             .map(
                 m ->
                     MemberEntry.builder()
-                        .deviceId(m.deviceId())
+                        .tripMemberId(UUID.fromString(m.tripMemberId()))
                         .role(m.role())
                         .displayName(m.displayName())
                         .build())
@@ -83,7 +83,7 @@ public class PollDetailResponse {
         .title(poll.getTitle())
         .status(poll.getStatus().name())
         .lockedSlotId(poll.getLockedSlotId())
-        .createdBy(poll.getCreatedBy())
+        .createdByMemberId(poll.getCreatedByTripMemberId())
         .createdAt(poll.getCreatedAt())
         .slots(slotDetails)
         .members(memberEntries)
@@ -108,7 +108,7 @@ public class PollDetailResponse {
   @NoArgsConstructor
   @AllArgsConstructor
   public static class VoteEntry {
-    private UUID deviceId;
+    private UUID tripMemberId;
     private String status;
   }
 
@@ -117,7 +117,7 @@ public class PollDetailResponse {
   @NoArgsConstructor
   @AllArgsConstructor
   public static class MemberEntry {
-    private UUID deviceId;
+    private UUID tripMemberId;
     private Role role;
     private String displayName;
   }

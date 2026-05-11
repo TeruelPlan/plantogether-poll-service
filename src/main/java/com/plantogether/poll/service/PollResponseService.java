@@ -41,7 +41,8 @@ public class PollResponseService {
             .findById(pollId)
             .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-    tripClient.requireMembership(poll.getTripId().toString(), deviceId);
+    var membership = tripClient.requireMembership(poll.getTripId().toString(), deviceId);
+    UUID memberUuid = UUID.fromString(membership.tripMemberId());
 
     if (poll.getStatus() == PollStatus.LOCKED) {
       throw new ConflictException("Poll is already locked");
@@ -53,17 +54,15 @@ public class PollResponseService {
             .findFirst()
             .orElseThrow(() -> new ResourceNotFoundException("PollSlot", request.getSlotId()));
 
-    UUID deviceUuid = UUID.fromString(deviceId);
-
     PollResponse saved =
         pollResponseRepository
-            .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
+            .findByPollSlot_IdAndTripMemberId(slot.getId(), memberUuid)
             .map(
                 existing -> {
                   existing.setStatus(request.getStatus());
                   return pollResponseRepository.saveAndFlush(existing);
                 })
-            .orElseGet(() -> insertOrRecover(slot, deviceUuid, request.getStatus()));
+            .orElseGet(() -> insertOrRecover(slot, memberUuid, request.getStatus()));
 
     List<PollResponse> slotResponses = pollResponseRepository.findByPollSlot_Id(slot.getId());
     int newSlotScore = PollScoring.scoreForSlot(slotResponses);
@@ -73,7 +72,7 @@ public class PollResponseService {
             poll.getId(),
             poll.getTripId(),
             slot.getId(),
-            deviceUuid,
+            memberUuid,
             request.getStatus(),
             newSlotScore));
 
@@ -87,29 +86,27 @@ public class PollResponseService {
             .findById(pollId)
             .orElseThrow(() -> new ResourceNotFoundException("Poll", pollId));
 
-    // Surface gRPC failure as 5xx to the caller — the matrix is meaningless without member columns.
-    // The members list also gates authorization: self-membership is confirmed by presence in the
-    // list,
-    // saving one round-trip compared to a separate IsMember call.
+    // Authorize first so non-members never see the members list.
+    tripClient.requireMembership(poll.getTripId().toString(), deviceId);
+
     List<TripMember> members = tripClient.getTripMembers(poll.getTripId().toString());
-    boolean isMember = members.stream().anyMatch(m -> deviceId.equals(m.deviceId().toString()));
-    if (!isMember) {
-      throw new AccessDeniedException("Device is not a member of this trip");
+    if (members.isEmpty()) {
+      throw new AccessDeniedException("Trip has no members");
     }
 
     List<PollResponse> responses = pollResponseRepository.findByPollSlot_Poll_Id(pollId);
     return PollDetailResponse.from(poll, responses, members);
   }
 
-  private PollResponse insertOrRecover(PollSlot slot, UUID deviceUuid, VoteStatus status) {
+  private PollResponse insertOrRecover(PollSlot slot, UUID memberUuid, VoteStatus status) {
     try {
-      return insertHelper.insertNew(slot, deviceUuid, status);
+      return insertHelper.insertNew(slot, memberUuid, status);
     } catch (DataIntegrityViolationException race) {
-      // Concurrent insert on (poll_slot_id, device_id) — re-read in the outer transaction and
-      // update.
+      // Concurrent insert on (poll_slot_id, trip_member_id) — re-read in the outer transaction
+      // and update.
       PollResponse existing =
           pollResponseRepository
-              .findByPollSlot_IdAndDeviceId(slot.getId(), deviceUuid)
+              .findByPollSlot_IdAndTripMemberId(slot.getId(), memberUuid)
               .orElseThrow(() -> race);
       existing.setStatus(status);
       return existing;

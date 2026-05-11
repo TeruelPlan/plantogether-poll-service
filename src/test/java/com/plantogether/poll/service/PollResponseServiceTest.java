@@ -53,7 +53,8 @@ class PollResponseServiceTest {
   UUID slotAId;
   UUID slotBId;
   String deviceId;
-  UUID deviceUuid;
+  UUID memberUuid;
+  String memberId;
   Poll poll;
   PollSlot slotA;
   PollSlot slotB;
@@ -64,8 +65,9 @@ class PollResponseServiceTest {
     tripId = UUID.randomUUID();
     slotAId = UUID.randomUUID();
     slotBId = UUID.randomUUID();
-    deviceUuid = UUID.randomUUID();
-    deviceId = deviceUuid.toString();
+    deviceId = UUID.randomUUID().toString();
+    memberUuid = UUID.randomUUID();
+    memberId = memberUuid.toString();
 
     slotA =
         PollSlot.builder()
@@ -88,7 +90,7 @@ class PollResponseServiceTest {
             .tripId(tripId)
             .title("When?")
             .status(PollStatus.OPEN)
-            .createdBy(UUID.randomUUID())
+            .createdByTripMemberId(UUID.randomUUID())
             .createdAt(Instant.now())
             .updatedAt(Instant.now())
             .build();
@@ -101,7 +103,7 @@ class PollResponseServiceTest {
   private void stubMember(boolean member) {
     if (member) {
       when(tripClient.requireMembership(tripId.toString(), deviceId))
-          .thenReturn(new TripMembership(true, Role.PARTICIPANT));
+          .thenReturn(new TripMembership(true, Role.PARTICIPANT, memberId));
     } else {
       when(tripClient.requireMembership(tripId.toString(), deviceId))
           .thenThrow(new AccessDeniedException("Device is not a member of this trip"));
@@ -112,16 +114,16 @@ class PollResponseServiceTest {
   void respond_newVote_member_savesAndReturns() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
     stubMember(true);
-    when(pollResponseRepository.findByPollSlot_IdAndDeviceId(slotAId, deviceUuid))
+    when(pollResponseRepository.findByPollSlot_IdAndTripMemberId(slotAId, memberUuid))
         .thenReturn(Optional.empty());
-    when(insertHelper.insertNew(slotA, deviceUuid, VoteStatus.YES))
+    when(insertHelper.insertNew(slotA, memberUuid, VoteStatus.YES))
         .thenAnswer(
             inv -> {
               PollResponse pr =
                   PollResponse.builder()
                       .id(UUID.randomUUID())
                       .pollSlot(slotA)
-                      .deviceId(deviceUuid)
+                      .tripMemberId(memberUuid)
                       .status(VoteStatus.YES)
                       .build();
               return pr;
@@ -132,7 +134,7 @@ class PollResponseServiceTest {
                 PollResponse.builder()
                     .id(UUID.randomUUID())
                     .pollSlot(slotA)
-                    .deviceId(deviceUuid)
+                    .tripMemberId(memberUuid)
                     .status(VoteStatus.YES)
                     .build()));
 
@@ -144,9 +146,9 @@ class PollResponseServiceTest {
 
     assertEquals(slotAId, result.getSlotId());
     assertEquals("YES", result.getStatus());
-    assertEquals(deviceUuid, result.getDeviceId());
+    assertEquals(memberUuid, result.getTripMemberId());
 
-    verify(insertHelper).insertNew(slotA, deviceUuid, VoteStatus.YES);
+    verify(insertHelper).insertNew(slotA, memberUuid, VoteStatus.YES);
   }
 
   @Test
@@ -155,13 +157,13 @@ class PollResponseServiceTest {
         PollResponse.builder()
             .id(UUID.randomUUID())
             .pollSlot(slotA)
-            .deviceId(deviceUuid)
+            .tripMemberId(memberUuid)
             .status(VoteStatus.YES)
             .build();
 
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
     stubMember(true);
-    when(pollResponseRepository.findByPollSlot_IdAndDeviceId(slotAId, deviceUuid))
+    when(pollResponseRepository.findByPollSlot_IdAndTripMemberId(slotAId, memberUuid))
         .thenReturn(Optional.of(existing));
     when(pollResponseRepository.saveAndFlush(existing)).thenReturn(existing);
     when(pollResponseRepository.findByPollSlot_Id(slotAId)).thenReturn(List.of(existing));
@@ -209,7 +211,7 @@ class PollResponseServiceTest {
                 RespondRequest.builder().slotId(slotAId).status(VoteStatus.YES).build()));
 
     verifyNoInteractions(insertHelper);
-    verify(pollResponseRepository, never()).findByPollSlot_IdAndDeviceId(any(), any());
+    verify(pollResponseRepository, never()).findByPollSlot_IdAndTripMemberId(any(), any());
     verifyNoInteractions(applicationEventPublisher);
   }
 
@@ -250,16 +252,16 @@ class PollResponseServiceTest {
   void respond_afterSave_publishesInternalEvent() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
     stubMember(true);
-    when(pollResponseRepository.findByPollSlot_IdAndDeviceId(slotAId, deviceUuid))
+    when(pollResponseRepository.findByPollSlot_IdAndTripMemberId(slotAId, memberUuid))
         .thenReturn(Optional.empty());
     PollResponse inserted =
         PollResponse.builder()
             .id(UUID.randomUUID())
             .pollSlot(slotA)
-            .deviceId(deviceUuid)
+            .tripMemberId(memberUuid)
             .status(VoteStatus.YES)
             .build();
-    when(insertHelper.insertNew(slotA, deviceUuid, VoteStatus.YES)).thenReturn(inserted);
+    when(insertHelper.insertNew(slotA, memberUuid, VoteStatus.YES)).thenReturn(inserted);
     when(pollResponseRepository.findByPollSlot_Id(slotAId)).thenReturn(List.of(inserted));
 
     service.respond(
@@ -272,7 +274,7 @@ class PollResponseServiceTest {
     assertEquals(pollId, event.pollId());
     assertEquals(tripId, event.tripId());
     assertEquals(slotAId, event.slotId());
-    assertEquals(deviceUuid, event.deviceId());
+    assertEquals(memberUuid, event.tripMemberId());
     assertEquals(VoteStatus.YES, event.status());
     assertEquals(2, event.newSlotScore(), "1 YES × 2 = 2");
   }
@@ -281,17 +283,17 @@ class PollResponseServiceTest {
   void respond_concurrentInsert_fallbackUpdates() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
     stubMember(true);
-    when(pollResponseRepository.findByPollSlot_IdAndDeviceId(slotAId, deviceUuid))
+    when(pollResponseRepository.findByPollSlot_IdAndTripMemberId(slotAId, memberUuid))
         .thenReturn(Optional.empty()) // first lookup: nothing
         .thenReturn(
             Optional.of(
                 PollResponse.builder()
                     .id(UUID.randomUUID())
                     .pollSlot(slotA)
-                    .deviceId(deviceUuid)
+                    .tripMemberId(memberUuid)
                     .status(VoteStatus.MAYBE)
                     .build())); // race re-lookup
-    when(insertHelper.insertNew(slotA, deviceUuid, VoteStatus.YES))
+    when(insertHelper.insertNew(slotA, memberUuid, VoteStatus.YES))
         .thenThrow(new DataIntegrityViolationException("duplicate key"));
     when(pollResponseRepository.findByPollSlot_Id(slotAId))
         .thenReturn(
@@ -299,7 +301,7 @@ class PollResponseServiceTest {
                 PollResponse.builder()
                     .id(UUID.randomUUID())
                     .pollSlot(slotA)
-                    .deviceId(deviceUuid)
+                    .tripMemberId(memberUuid)
                     .status(VoteStatus.YES)
                     .build()));
 
@@ -310,19 +312,20 @@ class PollResponseServiceTest {
             RespondRequest.builder().slotId(slotAId).status(VoteStatus.YES).build());
 
     assertEquals("YES", result.getStatus());
-    verify(pollResponseRepository, times(2)).findByPollSlot_IdAndDeviceId(slotAId, deviceUuid);
+    verify(pollResponseRepository, times(2)).findByPollSlot_IdAndTripMemberId(slotAId, memberUuid);
     verify(applicationEventPublisher).publishEvent(any(PollVoteCastInternalEvent.class));
   }
 
   @Test
   void getPollDetail_member_returnsAggregatedScore() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    UUID otherDeviceId = UUID.randomUUID();
+    stubMember(true);
+    String otherMemberId = UUID.randomUUID().toString();
     when(tripClient.getTripMembers(tripId.toString()))
         .thenReturn(
             List.of(
-                new TripMember(deviceUuid, "Self", Role.PARTICIPANT),
-                new TripMember(otherDeviceId, "Alice", Role.ORGANIZER)));
+                new TripMember("Self", Role.PARTICIPANT, memberId),
+                new TripMember("Alice", Role.ORGANIZER, otherMemberId)));
 
     UUID voterA = UUID.randomUUID();
     UUID voterB = UUID.randomUUID();
@@ -332,19 +335,19 @@ class PollResponseServiceTest {
             PollResponse.builder()
                 .id(UUID.randomUUID())
                 .pollSlot(slotA)
-                .deviceId(voterA)
+                .tripMemberId(voterA)
                 .status(VoteStatus.YES)
                 .build(),
             PollResponse.builder()
                 .id(UUID.randomUUID())
                 .pollSlot(slotA)
-                .deviceId(voterB)
+                .tripMemberId(voterB)
                 .status(VoteStatus.YES)
                 .build(),
             PollResponse.builder()
                 .id(UUID.randomUUID())
                 .pollSlot(slotA)
-                .deviceId(voterC)
+                .tripMemberId(voterC)
                 .status(VoteStatus.MAYBE)
                 .build());
     when(pollResponseRepository.findByPollSlot_Poll_Id(pollId)).thenReturn(responses);
@@ -365,8 +368,7 @@ class PollResponseServiceTest {
   @Test
   void getPollDetail_nonMember_throwsAccessDeniedException() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripClient.getTripMembers(tripId.toString()))
-        .thenReturn(List.of(new TripMember(UUID.randomUUID(), "Alice", Role.ORGANIZER)));
+    stubMember(false);
 
     assertThrows(AccessDeniedException.class, () -> service.getPollDetail(pollId, deviceId));
     verify(pollResponseRepository, never()).findByPollSlot_Poll_Id(any());

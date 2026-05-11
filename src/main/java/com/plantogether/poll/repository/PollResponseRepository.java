@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PollResponseRepository extends JpaRepository<PollResponse, UUID> {
 
-  Optional<PollResponse> findByPollSlot_IdAndDeviceId(UUID pollSlotId, UUID deviceId);
+  Optional<PollResponse> findByPollSlot_IdAndTripMemberId(UUID pollSlotId, UUID tripMemberId);
 
   List<PollResponse> findByPollSlot_Id(UUID pollSlotId);
 

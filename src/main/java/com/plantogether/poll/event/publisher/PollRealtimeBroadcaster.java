@@ -28,7 +28,7 @@ public class PollRealtimeBroadcaster {
             .pollId(internal.pollId().toString())
             .tripId(internal.tripId().toString())
             .slotId(internal.slotId().toString())
-            .deviceId(internal.deviceId().toString())
+            .tripMemberId(internal.tripMemberId().toString())
             .status(internal.status().name())
             .newSlotScore(internal.newSlotScore())
             .occurredAt(Instant.now())
@@ -38,5 +38,10 @@ public class PollRealtimeBroadcaster {
   }
 
   public record PollVoteCastInternalEvent(
-      UUID pollId, UUID tripId, UUID slotId, UUID deviceId, VoteStatus status, int newSlotScore) {}
+      UUID pollId,
+      UUID tripId,
+      UUID slotId,
+      UUID tripMemberId,
+      VoteStatus status,
+      int newSlotScore) {}
 }

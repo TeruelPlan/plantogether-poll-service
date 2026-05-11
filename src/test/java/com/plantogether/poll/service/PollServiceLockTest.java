@@ -10,6 +10,7 @@ import com.plantogether.common.exception.ResourceNotFoundException;
 import com.plantogether.common.grpc.Role;
 import com.plantogether.common.grpc.TripClient;
 import com.plantogether.common.grpc.TripMember;
+import com.plantogether.common.grpc.TripMembership;
 import com.plantogether.poll.domain.Poll;
 import com.plantogether.poll.domain.PollSlot;
 import com.plantogether.poll.domain.PollStatus;
@@ -45,6 +46,7 @@ class PollServiceLockTest {
   UUID pollId;
   UUID slotId;
   String organizerDeviceId;
+  String organizerMemberId;
   Poll poll;
   PollSlot slot;
 
@@ -54,13 +56,14 @@ class PollServiceLockTest {
     pollId = UUID.randomUUID();
     slotId = UUID.randomUUID();
     organizerDeviceId = UUID.randomUUID().toString();
+    organizerMemberId = UUID.randomUUID().toString();
     poll =
         Poll.builder()
             .id(pollId)
             .tripId(tripId)
             .title("When?")
             .status(PollStatus.OPEN)
-            .createdBy(UUID.fromString(organizerDeviceId))
+            .createdByTripMemberId(UUID.fromString(organizerMemberId))
             .createdAt(Instant.now())
             .updatedAt(Instant.now())
             .build();
@@ -78,10 +81,10 @@ class PollServiceLockTest {
   @Test
   void lockPoll_organizer_updatesStatusAndPublishesEvent() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenReturn(new TripMembership(true, Role.ORGANIZER, organizerMemberId));
     when(tripClient.getTripMembers(tripId.toString()))
-        .thenReturn(
-            List.of(
-                new TripMember(UUID.fromString(organizerDeviceId), "Organizer", Role.ORGANIZER)));
+        .thenReturn(List.of(new TripMember("Organizer", Role.ORGANIZER, organizerMemberId)));
     when(pollResponseRepository.findByPollSlot_Poll_Id(pollId)).thenReturn(List.of());
 
     PollDetailResponse result = pollService.lockPoll(pollId, organizerDeviceId, slotId);
@@ -107,9 +110,8 @@ class PollServiceLockTest {
   @Test
   void lockPoll_participant_throwsAccessDenied() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripClient.getTripMembers(tripId.toString()))
-        .thenReturn(
-            List.of(new TripMember(UUID.fromString(organizerDeviceId), "User", Role.PARTICIPANT)));
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenReturn(new TripMembership(true, Role.PARTICIPANT, organizerMemberId));
 
     AccessDeniedException ex =
         assertThrows(
@@ -123,7 +125,8 @@ class PollServiceLockTest {
   @Test
   void lockPoll_nonMember_throwsAccessDenied() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripClient.getTripMembers(tripId.toString())).thenReturn(List.of());
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenThrow(new AccessDeniedException("Device is not a member of this trip"));
 
     assertThrows(
         AccessDeniedException.class, () -> pollService.lockPoll(pollId, organizerDeviceId, slotId));
@@ -135,10 +138,8 @@ class PollServiceLockTest {
   void lockPoll_alreadyLocked_throwsConflict() {
     poll.setStatus(PollStatus.LOCKED);
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripClient.getTripMembers(tripId.toString()))
-        .thenReturn(
-            List.of(
-                new TripMember(UUID.fromString(organizerDeviceId), "Organizer", Role.ORGANIZER)));
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenReturn(new TripMembership(true, Role.ORGANIZER, organizerMemberId));
 
     assertThrows(
         ConflictException.class, () -> pollService.lockPoll(pollId, organizerDeviceId, slotId));
@@ -149,10 +150,8 @@ class PollServiceLockTest {
   @Test
   void lockPoll_slotNotInPoll_throwsIllegalArgument() {
     when(pollRepository.findById(pollId)).thenReturn(Optional.of(poll));
-    when(tripClient.getTripMembers(tripId.toString()))
-        .thenReturn(
-            List.of(
-                new TripMember(UUID.fromString(organizerDeviceId), "Organizer", Role.ORGANIZER)));
+    when(tripClient.requireMembership(tripId.toString(), organizerDeviceId))
+        .thenReturn(new TripMembership(true, Role.ORGANIZER, organizerMemberId));
 
     UUID unknownSlotId = UUID.randomUUID();
     assertThrows(

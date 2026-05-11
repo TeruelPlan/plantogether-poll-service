@@ -40,12 +40,14 @@ class PollServiceTest {
 
   UUID tripId;
   String deviceId;
+  String memberId;
   CreatePollRequest request;
 
   @BeforeEach
   void setUp() {
     tripId = UUID.randomUUID();
     deviceId = UUID.randomUUID().toString();
+    memberId = UUID.randomUUID().toString();
     LocalDate future = LocalDate.now().plusMonths(2);
     request =
         CreatePollRequest.builder()
@@ -66,7 +68,7 @@ class PollServiceTest {
   @Test
   void createPoll_memberWithValidSlots_createsPollAndPublishesEvent() {
     when(tripClient.requireMembership(tripId.toString(), deviceId))
-        .thenReturn(new TripMembership(true, Role.PARTICIPANT));
+        .thenReturn(new TripMembership(true, Role.PARTICIPANT, memberId));
     when(pollRepository.save(any(Poll.class)))
         .thenAnswer(
             inv -> {
@@ -111,7 +113,7 @@ class PollServiceTest {
   @Test
   void getPollsForTrip_member_returnsList() {
     when(tripClient.requireMembership(tripId.toString(), deviceId))
-        .thenReturn(new TripMembership(true, Role.PARTICIPANT));
+        .thenReturn(new TripMembership(true, Role.PARTICIPANT, memberId));
 
     Poll poll =
         Poll.builder()
@@ -119,7 +121,7 @@ class PollServiceTest {
             .tripId(tripId)
             .title("Trip poll")
             .status(PollStatus.OPEN)
-            .createdBy(UUID.randomUUID())
+            .createdByTripMemberId(UUID.randomUUID())
             .createdAt(Instant.now())
             .updatedAt(Instant.now())
             .build();
